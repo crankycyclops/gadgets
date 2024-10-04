@@ -1,8 +1,8 @@
 length = 34.54
 width = 15
 height = 23
-thickness = 5
-filletRadius = 1.7
+filletRadius = 3.2
+thickness = filletRadius * 2 + 0.1 # The thickness must be greater than filletRadius * 2
 
 #r = cq.Workplane("front").hLine(length)
 #r = (
