@@ -7,14 +7,15 @@ filletRadius = 3.2
 probeHousingHeight = height / 2.5
 thickness = filletRadius * 2 + 0.1 # The thickness must be greater than filletRadius * 2
 
-# hLineTo allows using xCoordinate not distance
+# Draws half the C-shaped bracket
 result = cq.Workplane("front").hLine(length / 2)\
     .vLine(height)\
     .hLine(-thickness)\
     .vLine(-height + thickness)\
     .hLineTo(0.0)
 
-result = result.mirrorY().extrude(width)  # mirror the geometry and extrude
+# Draws the other half of the C-shaped bracket
+result = result.mirrorY().extrude(width)
 
 # This adds the rounded inner edges for the bracket to sit comfortably
 # on top of the stirer
@@ -28,19 +29,29 @@ result = result.edges("|Z and <Y").fillet(1)
 innerCylinder = cq.Workplane("XZ").cylinder(probeHousingHeight, probeRadius)\
     .translate((length / 2 + (probeRadius * 2) - (0.5 * probeRadius), height / 2, width / 2))
 
-# Add the cylindrical housing for the probe
-# Use probeRadius to size the cylinder
+# Add the cylindrical housing for the probe. Use probeRadius
+# to size the cylinder.
 outerCylinder = cq.Workplane("XZ").cylinder(probeHousingHeight, probeRadius * 2)\
     .translate((length / 2 + (probeRadius * 2) - (0.5 * probeRadius), height / 2, width / 2))\
     .cut(innerCylinder)
 
-snapInShortSide = probeRadius * 0.8
-snapInLongSide = probeRadius * 1.2
+# This is the tighter inner width that the probe pushes into
+snapInVLineInner = probeRadius * 0.8
+
+# This is the outer width of the snap in for the probe
+snapInVLineOuter = probeRadius * 1.2
+
+# These are the X and Z components of the lines that connect
+# snapInVLineInner and snapInVLineOuter
+snapInHLineXComponent = probeRadius + 0.2
+snapInHLineZComponent = (snapInVLineOuter - snapInVLineInner) / 2
 
 # A small cutaway where we can push the probe into position
 snapIn = cq.Workplane("XZ").moveTo(-probeRadius / 2, -probeRadius / 2)\
-    .hLine(probeRadius + 0.2).vLine(probeRadius * 0.85)\
-    .hLine(-probeRadius - 0.2).vLine(-probeRadius * 0.85)\
+    .line(snapInHLineXComponent, -snapInHLineZComponent)\
+    .vLine(snapInVLineOuter)\
+    .line(-snapInHLineXComponent, -snapInHLineZComponent)\
+    .vLine(-snapInVLineInner)\
     .close()\
     .extrude(probeHousingHeight)\
     .translate((length / 2 + (probeRadius * 2) - (0.5 * probeRadius), height / 2, width / 2))\
