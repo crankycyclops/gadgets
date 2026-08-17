@@ -16,7 +16,7 @@ emt_od = 29.54;
 // Clearance between the conduit and cap.
 // Start with 0.20 mm for a snug fit.
 // Increase to 0.30–0.40 mm if your printer makes holes undersized.
-clearance = 0.20;
+clearance = 0.35;
 
 // The opening is slightly wider to help start the cap.
 lead_in_extra = 0.35;
@@ -33,7 +33,7 @@ wall_thickness = 2.4;
 end_thickness = 3.0;
 
 // Enlarged stop flange
-flange_diameter = 40;
+flange_diameter = 50;
 flange_thickness = 4.0;
 
 // Length of tapered lead-in at the open end
