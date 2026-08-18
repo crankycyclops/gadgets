@@ -1,48 +1,49 @@
-"""Quick geometry validation for V4.
+"""Assembly checks for revision 6.
 
-Checks that the frame and representative top/right doors are valid solids and
-that the doors do not intersect the frame over the intended 0..90 degree sweep.
+Checks valid solids, closed-door stacking, and each door's complete closed-to-open
+90-degree sweep against the frame.  A tiny coincident-contact tolerance is ignored.
 """
 import cadquery as cq
 import params as p
-import frame, top_door, right_door
+import frame, top_door, bottom_door, left_door, right_door
+from common import hinge_axis
 
 
-def intersection_volume(a, b):
-    i = a.intersect(b)
-    return 0.0 if i.isNull() else i.Volume()
+def vol(a,b):
+    x=a.intersect(b)
+    return 0.0 if x.isNull() else x.Volume()
+
+
+def rotate_door(solid, side, angle):
+    x,y,z=hinge_axis(side)
+    if side in ('top','bottom'):
+        return solid.rotate(cq.Vector(x,y,z), cq.Vector(x+1,y,z), angle)
+    return solid.rotate(cq.Vector(x,y,z), cq.Vector(x,y+1,z), angle)
 
 
 def main():
-    F = frame.build().val()
-    assert F.isValid(), "frame is not a valid solid"
+    F=frame.build().val(); assert F.isValid()
+    doors={
+        'top':top_door.build().val(), 'bottom':bottom_door.build().val(),
+        'left':left_door.build().val(), 'right':right_door.build().val()}
+    for s,d in doors.items(): assert d.isValid(), s
 
-    cavity_w = p.LIGHT_W + p.XY_CLEARANCE
-    cavity_h = p.LIGHT_H + p.XY_CLEARANCE
-    outer_w = cavity_w + 2 * p.WALL
-    outer_h = cavity_h + 2 * p.WALL
-    r = p.HINGE_OD / 2
+    # Closed doors must not collide with the frame or each other.
+    for s,d in doors.items():
+        v=vol(F,d)
+        assert v < p.COLLISION_EPS, f'{s} closed/frame collision {v}'
+    names=list(doors)
+    for i,a in enumerate(names):
+        for b in names[i+1:]:
+            v=vol(doors[a],doors[b])
+            assert v < p.COLLISION_EPS, f'closed {a}/{b} collision {v}'
 
-    local_y = -(r + p.HINGE_RADIAL_GAP)
-    top_y = outer_h / 2 + r + p.HINGE_RADIAL_GAP
-    T = top_door.build().val().translate(cq.Vector(0, top_y - local_y, 0))
-    assert T.isValid(), "top door is not a valid solid"
-    for angle in range(0, -91, -5):
-        moved = T.rotate(cq.Vector(0, top_y, r), cq.Vector(1, top_y, r), angle)
-        v = intersection_volume(F, moved)
-        assert v < 1e-5, f"top door/frame collision at {angle} deg: {v} mm^3"
+    directions={'top':1, 'bottom':-1, 'left':1, 'right':-1}
+    for s,d in doors.items():
+        for deg in range(0,91,3):
+            moved=rotate_door(d,s,directions[s]*deg)
+            v=vol(F,moved)
+            assert v < p.COLLISION_EPS, f'{s} frame collision at {deg}: {v}'
+    print('PASS: valid solids; all doors stack closed and each clears the frame through 0-90 degrees')
 
-    local_x = -(r + p.HINGE_RADIAL_GAP)
-    right_x = outer_w / 2 + r + p.HINGE_RADIAL_GAP
-    D = right_door.build().val().translate(cq.Vector(right_x - local_x, 0, 0))
-    assert D.isValid(), "right door is not a valid solid"
-    for angle in range(0, 91, 5):
-        moved = D.rotate(cq.Vector(right_x, 0, r), cq.Vector(right_x, 1, r), angle)
-        v = intersection_volume(F, moved)
-        assert v < 1e-5, f"right door/frame collision at {angle} deg: {v} mm^3"
-
-    print("PASS: valid solids; no frame/door interference through intended 0-90 degree sweeps")
-
-
-if __name__ == "__main__":
-    main()
+if __name__=='__main__': main()

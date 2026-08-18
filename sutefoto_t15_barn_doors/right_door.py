@@ -1,8 +1,10 @@
 import cadquery as cq
-from common import vertical_door
+from common import build_door
+
 
 def build():
-    return vertical_door()
+    return build_door("right")
+
 
 if __name__ == "__main__":
     result = build()

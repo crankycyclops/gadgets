@@ -1,8 +1,10 @@
 import cadquery as cq
-from common import horizontal_door
+from common import build_door
+
 
 def build():
-    return horizontal_door()
+    return build_door("top")
+
 
 if __name__ == "__main__":
     result = build()
@@ -10,6 +12,3 @@ if __name__ == "__main__":
         show_object(result)
     except NameError:
         cq.exporters.export(result, "top_door.stl")
-
-# Comment this out if not using cq-editor
-show_object(build())

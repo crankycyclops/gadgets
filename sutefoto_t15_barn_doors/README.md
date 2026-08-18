@@ -1,70 +1,77 @@
-# SUTEFOTO T15 printable barn doors — Revision 4
+# SUTEFOTO T15 barn doors — Revision 6 fold-flat / light-trap redesign
 
-Five printable CadQuery modules:
+This revision replaces the previous frame and doors.  It keeps the same collar-fit concept and familiar fit parameter names, but moves the hinge axes forward of the light so the doors can close over the diffuser without striking the frame.
 
-- `frame.py`
-- `top_door.py`
-- `bottom_door.py`
-- `left_door.py`
-- `right_door.py`
+## What changed
 
-Shared dimensions are in `params.py`; shared geometry helpers are in `common.py`.
-`export_all.py` exports STL and STEP files. `fit_test_coupon.py` is the small fit-check print.
+- **Fold-flat closing:** each door is modeled in its fully closed position and opens 90° outward.
+- **Closed-door stacking:** top, bottom, and side leaves use three slightly staggered Z planes so all four can be closed at once. Left/right share one plane because they do not meet in the center.
+- **Light-leak control:** each leaf overlaps the outer frame edge by `LIGHT_TRAP_OVERLAP`; when opened, that root portion becomes a skirt across the former frame/door gap.
+- **Stronger door hinges:** the fork knuckles use tapered 11 mm roots and 10 mm-deep reinforced webs.
+- **Simple friction hardware:** M3 through-bolt + washers + nyloc nut. Tighten until the door takes deliberate hand pressure to move.
+- **No external clamp blocks:** this revision assumes the collar fit and front retaining lip hold the light, avoiding the protruding clamp-boss interference from earlier revisions.
 
-## Fit parameters you can keep from your prior copy
+## Keep your fit tuning
 
-Your previous tuning remains compatible. In particular:
+If you already tuned the old project, copy your preferred values for these into this `params.py`:
 
-- `XY_CLEARANCE` — total width/height clearance around the light
-- `CORNER_RADIUS_BODY` — inside corner radius that matches the light body
-- `CORNER_RADIUS_OUTER` — outside frame corner radius
+- `XY_CLEARANCE`
+- `CORNER_RADIUS_BODY`
+- `CORNER_RADIUS_OUTER` (or leave it derived as `CORNER_RADIUS_BODY + WALL`)
+- `WALL` if you changed it
 
-If you already tuned those values, copy your values into this V4 `params.py` before exporting.
+Do not copy old hinge-Z or clamp parameters.
 
-## What V4 fixes
+## Hinge hardware
 
-V2 put the top/bottom clamp bosses directly beside the hinge barrels, so a door could hit them.
-V3 removed the bosses but made the screw access impractical.
+Each of 8 hinge stations uses:
 
-V4 uses **rear-mounted external clamp bosses**. The M3 retaining screws are installed normally
-from the outside toward the light, but the screw axes are at `CLAMP_SCREW_Z = 11.0 mm`, behind
-the 8 mm collar and behind the hinge barrel. Thus the clamp hardware does not occupy the intended
-0° to 90° barn-door sweep in front of the light.
+`M3 screw -> washer -> door fork -> frame center knuckle -> door fork -> washer -> M3 nyloc`
 
-Use four M3 retaining/set screws. Nylon screws are preferred; with metal screws use a small
-felt/TPU/rubber pad at the contact point. Start with M3 x 8 to M3 x 10 depending on your final fit.
+Recommended starting hardware:
 
-## Hinges: simple through-bolt friction pivots
+- 8 × M3 × 20 mm socket-head screws
+- 16 × M3 flat washers
+- 8 × M3 nyloc nuts
 
-Each of the eight hinge stations uses this stack:
+The modeled bore is 3.3 mm. Do not intentionally generate support inside it; clean with a 3.2–3.3 mm drill by hand if necessary.
 
-`M3 screw head -> M3 washer -> door fork -> frame knuckle -> door fork -> M3 washer -> M3 nyloc nut`
+## Validation
 
-The modeled bore is 3.3 mm, deliberately a clearance hole. The **friction comes from tightening
-the nyloc nut**, not from making the screw bind in the printed bore. Tighten each pivot until the
-door takes deliberate hand pressure to move and stays at arbitrary angles.
+`validate_assembly.py` checks:
 
-Recommended hardware:
+1. all five solids are valid;
+2. all four doors can occupy their fully closed stacked positions simultaneously without solid intersection;
+3. each door clears the frame through its complete 0–90° closed-to-open sweep.
 
-- 8 x M3 x 20 mm socket-head cap screws
-- 16 x M3 flat washers
-- 8 x M3 nyloc nuts
+Run:
 
-The printed hinge stack is about 11.7 mm wide before washers/nut, so 20 mm gives comfortable
-thread engagement through a nyloc nut without depending on perfect printed dimensions.
+```bash
+python validate_assembly.py
+```
 
-## Supports
+Expected output:
 
-Do not intentionally fill the 3.3 mm M3 hinge bores with support. Small horizontal bores are
-better printed open and cleaned with a 3.2–3.3 mm drill by hand if necessary. Keep support only
-where your slicer identifies genuinely unsupported exterior hinge geometry.
+```text
+PASS: valid solids; all doors stack closed and each clears the frame through 0-90 degrees
+```
+
+## CQ-Editor
+
+Every main part module can render directly in CQ-Editor. Open the module and click Run; each contains:
+
+```python
+if __name__ == "__main__":
+    result = build()
+    show_object(result)
+```
+
+(The `try/except` wrapper also permits normal command-line STL export.)
 
 ## Export
-
-From this directory:
 
 ```bash
 python export_all.py
 ```
 
-Outputs are written to `exports/` as STL and STEP.
+STL and STEP files are written to `exports/`.
