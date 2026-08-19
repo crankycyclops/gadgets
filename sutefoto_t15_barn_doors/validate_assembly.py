@@ -1,7 +1,11 @@
-"""Assembly checks for revision 6.
+"""Assembly checks.
 
-Checks valid solids, closed-door stacking, and each door's complete closed-to-open
-90-degree sweep against the frame.  A tiny coincident-contact tolerance is ignored.
+Checks valid solids, closed-door stacking, and each door's complete sweep from
+closed to FRAME_HINGE_MAX_OPEN against the frame.  A tiny coincident-contact
+tolerance is ignored.
+
+The sweep runs to the full travel deliberately: revision 9's beam silently
+capped the doors at 96 degrees, which no 0-90 check could ever have caught.
 """
 import cadquery as cq
 import params as p
@@ -39,11 +43,12 @@ def main():
             assert v < p.COLLISION_EPS, f'closed {a}/{b} collision {v}'
 
     directions={'top':1, 'bottom':-1, 'left':1, 'right':-1}
+    travel=int(p.FRAME_HINGE_MAX_OPEN)
     for s,d in doors.items():
-        for deg in range(0,91,3):
+        for deg in range(0,travel+1,3):
             moved=rotate_door(d,s,directions[s]*deg)
             v=vol(F,moved)
             assert v < p.COLLISION_EPS, f'{s} frame collision at {deg}: {v}'
-    print('PASS: valid solids; all doors stack closed and each clears the frame through 0-90 degrees')
+    print(f'PASS: valid solids; all doors stack closed and each clears the frame through 0-{travel} degrees')
 
 if __name__=='__main__': main()

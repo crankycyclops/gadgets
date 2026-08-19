@@ -81,8 +81,23 @@ def hinge_axis(side):
 # top/bottom blocks start at |y| >= 40.1.
 # --------------------------------------------------------------------------
 
-_TRAVEL = {"top": 90.0, "bottom": -90.0, "left": 90.0, "right": -90.0}
+_OPEN_DIRECTION = {"top": 1, "bottom": -1, "left": 1, "right": -1}
 _PROFILE_PLANE = {"X": "YZ", "Y": "XZ"}
+
+
+def _travel(side, about):
+    """Signed in-plane travel of a leaf, in the (u, v) plane of its hinge.
+
+    A right-handed rotation about +Y runs backwards in the (x, z) plane, so the
+    left/right leaves sweep the opposite way to their door angle.
+    """
+    signed = _OPEN_DIRECTION[side] * p.FRAME_HINGE_MAX_OPEN
+    return signed if about == "X" else -signed
+
+
+def _stations(about):
+    return (p.HORIZONTAL_HINGE_STATIONS if about == "X"
+            else p.VERTICAL_HINGE_STATIONS)
 
 
 def _axis_frame(side):
@@ -161,26 +176,24 @@ def _wedge_pts(radius, a0, a1):
     return pts
 
 
-def _door_opening(side, station, width):
-    """The single open slot the door swings in.
+def _sweep_wedge(side, station, width, rects, inner):
+    """Everywhere `rects` reach over the door's travel, from `inner` outward.
 
-    Leaf and fork each stay inside the annulus their own rectangle spans,
-    rotated by at most the door's travel, so one sector over the wider of the
-    two contains the whole swept volume.  Cutting that as a single shape --
-    rather than chasing the fork's flare band by band -- is what keeps the slot
-    open instead of leaving thin stepped teeth standing in it.
+    `inner` matters as much as the sector does.  The leaf is a thin plate that
+    never comes nearer the axis than its root radius, so cutting the beam from
+    the barrel outward on the leaf's account throws away a solid ring of plastic
+    around the knuckle for nothing.
 
-    The inner radius is the barrel radius exactly, with no radial slack: the
-    forks turn about this same axis, so there is nothing to clear radially and
-    any inflation here would eat into the knuckle the bolt runs through.
+    A rect stays inside the annulus it spans, rotated by at most the door's
+    travel, so one sector contains its whole swept volume.  Cutting that as a
+    single shape -- rather than chasing the fork's flare band by band -- is what
+    keeps the slot open instead of leaving stepped teeth standing in it.
     """
     about, ua, va, _, _ = _axis_frame(side)
-    # A right-handed rotation about +Y runs backwards in the (x, z) plane, so
-    # the left/right leaves sweep the opposite way to their door angle.
-    travel = _TRAVEL[side] if about == "X" else -_TRAVEL[side]
+    travel = _travel(side, about)
     amin = amax = None
     rmax = 0.0
-    for rect in _door_profile_rects(side):
+    for rect in rects:
         _, r1, a0, a1 = _rect_polar(*rect)
         rmax = max(rmax, r1)
         amin = a0 if amin is None else min(amin, a0)
@@ -190,8 +203,7 @@ def _door_opening(side, station, width):
                      amin + min(0.0, travel) - slack,
                      amax + max(0.0, travel) + slack)
     wedge = _prism(about, pts, ua, va, station, width)
-    barrel = _axis_cylinder(about, ua, va, station, p.HINGE_OD / 2, width + 2.0)
-    return wedge.cut(barrel)
+    return wedge.cut(_axis_cylinder(about, ua, va, station, inner, width + 2.0))
 
 
 def _door_profile_rects(side):
@@ -239,26 +251,180 @@ def _hinge_block(side, station):
            (edge - ua, -va), (u_in - ua, -va)]
     block = _prism(about, pts, ua, va, station, p.FRAME_HINGE_BEAM_W)
 
-    # Hardware channel: coaxial, everywhere except the centre knuckle itself.
-    channel = _axis_cylinder(about, ua, va, station, p.FRAME_HINGE_FASTENER_R, span)
+    leaf, fork = _door_profile_rects(side)
+    leaf_rmin = _rect_polar(*leaf)[0]
+
+    # Across the whole beam, only what the leaf sweeps -- and the leaf is a thin
+    # plate that never comes nearer the axis than its root radius.
+    block = block.cut(_sweep_wedge(side, station, span, (leaf,), leaf_rmin))
+
+    # The forks do reach the barrel, but only where they actually are.  Cutting
+    # the full beam width down to the barrel is what left the saddle as a thin
+    # hook tapering to a point; keeping it to the forks' own flared footprint
+    # leaves a solid collar round the knuckle instead.
+    sector = _sweep_wedge(side, station, span, (fork,), p.HINGE_OD / 2)
+    for cone in _fork_slots(side, p.FRAME_HINGE_BEAM_W, stations=(station,)):
+        block = block.cut(cone.intersect(sector))
+    return block
+
+
+def _hardware_cuts(side, station):
+    """Room for the bolt, its washers and the nyloc, and for the door forks.
+
+    Applied to the finished frame rather than to the beam alone, because the
+    shroud runs straight through the same space.
+    """
+    about, ua, va, _, _ = _axis_frame(side)
+    # Stops at the beam's own width.  The hardware never reaches past it, and
+    # anything further would only be cutting the shroud for nothing.
+    channel = _axis_cylinder(about, ua, va, station, p.FRAME_HINGE_FASTENER_R,
+                             p.FRAME_HINGE_BEAM_W)
     core = _axis_slab(about, station, -p.HINGE_CENTER_W / 2.0, p.HINGE_CENTER_W / 2.0)
-    block = block.cut(channel.cut(core))
+    return [channel.cut(core),
+            _axis_cylinder(about, ua, va, station, p.HINGE_BORE_D / 2.0,
+                           p.FRAME_HINGE_BEAM_W + 4.0)]
 
-    # One clean opening for the door, across the whole beam.  What survives is
-    # the arc behind and outboard of the barrel, which is the load path back to
-    # the frame; the beam keeps its full width all the way along it.
-    block = block.cut(_door_opening(side, station, span))
 
-    return block.cut(_axis_cylinder(about, ua, va, station, p.HINGE_BORE_D / 2.0, span))
+def _shroud_radius(side):
+    """How far the shroud may reach from the hinge axis: just inside the circle
+    the leaf root sweeps."""
+    return _rect_polar(*_door_profile_rects(side)[0])[0] - p.FRAME_SHROUD_CLEAR
+
+
+def _leaf_reach(side):
+    """Half-width of the widest thing on this leaf, plus a margin.  Outside this
+    the leaf simply is not there, at any angle."""
+    base = (p.TOP_BOTTOM_BASE_W if side in ("top", "bottom") else p.SIDE_BASE_H)
+    return base / 2.0 + 1.0
+
+
+def _shroud_side_depth(side):
+    """How far forward this side's wall may reach.
+
+    Set by the wall's inboard face, which is the part nearest the circle the
+    leaf root sweeps.  One number per side gives a plain flat-bottomed wall --
+    following the clearance cylinder itself would buy about 1.4 mm more depth on
+    the outboard half and cost a tapered, pointed edge to get it.
+    """
+    _, ua, va, _, edge = _axis_frame(side)
+    rho = _shroud_radius(side)
+    standoff = abs(edge - ua)
+    return abs(va) + math.sqrt(max(0.0, rho * rho - standoff * standoff))
+
+
+def _shroud_depth():
+    return max(_shroud_side_depth(s)
+               for s in ("top", "bottom", "left", "right"))
+
+
+def _shroud():
+    """One wall following the frame's whole outline, standing forward from the
+    front face, to block the light that otherwise pours out of the frame/leaf
+    gap when a door is open.
+
+    Where a leaf can reach it, the wall is trimmed by a cylinder concentric with
+    that leaf's hinge axis, FRAME_SHROUD_CLEAR inside the circle the leaf root
+    sweeps.  Both being surfaces of revolution about the axis, their separation
+    is the same at every door angle -- which is exactly what a flat skirt cannot
+    manage, and why this works away from 90 degrees.
+
+    The corners stay at full depth on purpose.  The leaves are narrower than the
+    frame -- |x| <= 77 against an 82.75 edge, |y| <= 37 against 42.25 -- so
+    nothing sweeps the corners at any angle and there is nothing to clear there.
+
+    The wall sits outboard of the frame's outer face, so it stays clear of the
+    plane the closed leaves stack in and leaves the light trap untouched.
+    """
+    ow, oh = frame_dims()
+    t = p.FRAME_SHROUD_T
+    sides = ("top", "bottom", "left", "right")
+    depth = _shroud_depth()
+
+    # Carried back over the collar's full depth, not just forward of the front
+    # face.  Stopping at z=0 would leave the wall joined to the frame along the
+    # outer edge line only -- a knife edge that is neither strong nor printable.
+    # Sheathing the collar gives a proper face-to-face join instead.
+    height = depth + p.COLLAR_DEPTH
+    outer = rounded_prism(ow + 2 * t, oh + 2 * t, height,
+                          p.CORNER_RADIUS_OUTER + t, z0=-depth)
+    inner = rounded_prism(ow, oh, height + 2, p.CORNER_RADIUS_OUTER, z0=-depth - 1)
+    ring = outer.cut(inner)
+
+    for side in sides:
+        about, ua, va, sign, edge = _axis_frame(side)
+        reach = _leaf_reach(side)
+        # A single flat step back to this side's own depth, across the span the
+        # leaf can reach.  Only that span: the corners stay at full depth, since
+        # the leaves are narrower than the frame and never sweep them.
+        cut_h = depth + 2 - _shroud_side_depth(side)
+        lo, hi = sorted((edge - sign * 1.0, edge + sign * (t + 1.0)))
+        if about == "X":
+            box = cq.Workplane("XY").box(2 * reach, hi - lo, cut_h,
+                                         centered=(True, True, False))
+            box = box.translate((0, (lo + hi) / 2, -(depth + 2)))
+        else:
+            box = cq.Workplane("XY").box(hi - lo, 2 * reach, cut_h,
+                                         centered=(True, True, False))
+            box = box.translate(((lo + hi) / 2, 0, -(depth + 2)))
+        ring = ring.cut(box)
+        for cut in _fork_slots(side, _shroud_radius(side)):
+            ring = ring.cut(cut)
+    return ring
+
+
+_REVOLVE_PLANE = {"X": "XZ", "Y": "YZ"}
+
+
+def _fork_slots(side, rho, stations=None):
+    """Slots where the door forks sweep through the shroud.
+
+    A fork web flares from HINGE_FORK_W at the barrel to DOOR_HINGE_ROOT_W at
+    its root, so the slot has to widen with radius.  That makes the exact slot a
+    solid of revolution about the hinge axis with a straight tapered side, which
+    is what gets revolved here -- approximating it with a stack of radial bands
+    leaves a staircase down the slot edge.
+
+    Revolved through a full turn because a fork visits many angles, so the slot
+    has to be open at all of them.
+    """
+    about, ua, va, _, _ = _axis_frame(side)
+    r = p.HINGE_OD / 2
+    u_root = abs(_door_profile_rects(side)[1][1])
+    off = p.HINGE_CENTER_W / 2 + p.HINGE_AXIAL_GAP + p.HINGE_FORK_W / 2
+    flare = (p.DOOR_HINGE_ROOT_W - p.HINGE_FORK_W) / 2.0
+
+    near = p.HINGE_FORK_W / 2 + p.FRAME_SHROUD_FORK_CLEAR
+    # Width the web has reached by the time it leaves the shroud.  Held constant
+    # past that rather than carrying on growing, so the slot is never cut wider
+    # than the shroud actually needs.
+    far = near + flare * min(1.0, max(0.0, (rho - r) / (u_root - r)))
+
+    cuts = []
+    for station in (_stations(about) if stations is None else stations):
+        for c in (station - off, station + off):
+            # Constant width inside the barrel radius, then the flare.
+            pts = [(c - near, va), (c + near, va), (c + near, va + r),
+                   (c + far, va + rho), (c + far, va + rho + 2.0),
+                   (c - far, va + rho + 2.0), (c - far, va + rho),
+                   (c - near, va + r)]
+            sol = (cq.Workplane(_REVOLVE_PLANE[about])
+                   .polyline(pts).close()
+                   .revolve(360, (0, va), (1, va)))
+            cuts.append(sol.translate((0, ua, 0) if about == "X" else (ua, 0, 0)))
+    return cuts
 
 
 def add_frame_hinges(model):
-    for side in ("top", "bottom"):
-        for station in p.HORIZONTAL_HINGE_STATIONS:
+    model = model.union(_shroud())
+    for side in ("top", "bottom", "left", "right"):
+        about = _axis_frame(side)[0]
+        for station in _stations(about):
             model = model.union(_hinge_block(side, station))
-    for side in ("left", "right"):
-        for station in p.VERTICAL_HINGE_STATIONS:
-            model = model.union(_hinge_block(side, station))
+    # Hardware clearance last, so it applies to the shroud as well as the beams.
+    for side in ("top", "bottom", "left", "right"):
+        for station in _stations(_axis_frame(side)[0]):
+            for cut in _hardware_cuts(side, station):
+                model = model.cut(cut)
     return model
 
 

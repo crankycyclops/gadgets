@@ -57,17 +57,37 @@ FRAME_HINGE_ROOT_DEPTH = 2.2
 # Plastic carried around the outboard side of the barrel.
 FRAME_HINGE_SADDLE_T = 3.2
 # Coaxial channel bored through the beam either side of the centre knuckle.
-# Clears the door fork barrels (r 4.0), an M3 washer (r 3.5), an M3 nyloc across
-# corners (r 3.2) and a 6 mm socket, so assembly is unchanged.
-FRAME_HINGE_FASTENER_R = 5.5
-# Slack added either end of the door's travel when cutting the slot it swings
-# in.  Angular rather than linear: the doors turn about the barrel axis, so an
-# angle is what actually separates them from the beam.  Past this the leaf meets
-# the beam, which gives the door a natural end stop just outside 0 and 90.
+# Sized to what actually has to fit and no more, because this channel also cuts
+# through the light shroud: door fork barrels (r 4.0 plus running clearance), an
+# M3 washer (r 3.5), an M3 nyloc across corners (r 3.2).  Every 0.1 mm here
+# costs shroud -- going from 5.5 to 4.6 returned 593 mm3 of it.
+FRAME_HINGE_FASTENER_R = 4.6
+# How far the leaves must swing.  The frame's hinge slot is cut for exactly this
+# much travel, so this is also what stops the doors -- past it the leaf meets the
+# beam.  Barn doors need to fold well back, so this is 180; the cost is only in
+# the beam's minimum section (171 mm2 at 135 degrees, 128 mm2 at 180), against
+# 4.6 mm2 in the revision 8 design that peeled off.
+FRAME_HINGE_MAX_OPEN = 180.0
+# Slack added either end of that travel.  Angular rather than linear: the doors
+# turn about the barrel axis, so an angle is what actually separates them.
 FRAME_HINGE_DOOR_ANGLE_CLEAR = 4.0
 # Radial truncation of the door-leaf sweep used for the clearance cut.  Only has
 # to exceed the beam's own reach from the hinge axis (~22 mm worst case).
 FRAME_HINGE_SWEEP_REACH = 40.0
+
+# Light shroud (revision 10).  With a leaf open, the gap between the frame's
+# front face and the leaf root is |HINGE_Z| + 7.8 -- 12.3 mm at the top, 19.9 mm
+# at the sides -- and light pours straight out of it.  A wall standing forward
+# from the outer edge closes most of that.  What makes it work at every door
+# angle rather than only at 90 is its tip: an arc concentric with the hinge axis,
+# just inside the circle the leaf root sweeps.  Both are then surfaces of
+# revolution about the axis, so their separation never changes as the door turns.
+FRAME_SHROUD_T = 2.4
+# Radial gap between the shroud tip and the circle the leaf root sweeps.  This
+# is the residual leak, and it is the same at every angle.
+FRAME_SHROUD_CLEAR = 0.6
+# Axial gap either side of a door fork where it passes through the shroud.
+FRAME_SHROUD_FORK_CLEAR = 0.6
 
 DOOR_HINGE_ROOT_W = 11.0
 DOOR_HINGE_ROOT_DEPTH = 10.0
