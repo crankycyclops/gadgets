@@ -12,3 +12,10 @@ if __name__ == "__main__":
         show_object(result)
     except NameError:
         cq.exporters.export(result, "bottom_door.stl")
+
+# CQ-Editor preview.  Still fires on Run in CQ-Editor; skipped when frame.py is
+# imported by export_all/validate_assembly, where show_object does not exist.
+try:
+    show_object(build())
+except NameError:
+    pass
