@@ -1,11 +1,16 @@
 """Assembly checks.
 
-Checks valid solids, closed-door stacking, and each door's complete sweep from
+Checks single solids, closed-door stacking, and each door's complete sweep from
 closed to FRAME_HINGE_MAX_OPEN against the frame.  A tiny coincident-contact
 tolerance is ignored.
 
 The sweep runs to the full travel deliberately: revision 9's beam silently
 capped the doors at 96 degrees, which no 0-90 check could ever have caught.
+
+`isValid()` is not enough on its own, either.  A compound of disjoint solids is
+perfectly valid, and that is exactly what the doors were up to revision 11: the
+fork webs met their knuckles along a tangent line of zero area, never fused, and
+each door exported as a leaf plus four loose rings.  So count the solids too.
 """
 import cadquery as cq
 import params as p
@@ -25,12 +30,18 @@ def rotate_door(solid, side, angle):
     return solid.rotate(cq.Vector(x,y,z), cq.Vector(x,y+1,z), angle)
 
 
+def one_solid(shape, name):
+    assert shape.isValid(), f'{name} is not a valid shape'
+    n=len(shape.Solids())
+    assert n==1, f'{name} is {n} disjoint solids, not one printable part'
+
+
 def main():
-    F=frame.build().val(); assert F.isValid()
+    F=frame.build().val(); one_solid(F,'frame')
     doors={
         'top':top_door.build().val(), 'bottom':bottom_door.build().val(),
         'left':left_door.build().val(), 'right':right_door.build().val()}
-    for s,d in doors.items(): assert d.isValid(), s
+    for s,d in doors.items(): one_solid(d,f'{s} door')
 
     # Closed doors must not collide with the frame or each other.
     for s,d in doors.items():
@@ -49,6 +60,6 @@ def main():
             moved=rotate_door(d,s,directions[s]*deg)
             v=vol(F,moved)
             assert v < p.COLLISION_EPS, f'{s} frame collision at {deg}: {v}'
-    print(f'PASS: valid solids; all doors stack closed and each clears the frame through 0-{travel} degrees')
+    print(f'PASS: five single solids; all doors stack closed and each clears the frame through 0-{travel} degrees')
 
 if __name__=='__main__': main()

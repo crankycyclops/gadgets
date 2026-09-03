@@ -12,22 +12,6 @@ def rounded_prism(width, height, depth, radius, z0=0.0):
     return wp.translate((0, 0, z0)) if z0 else wp
 
 
-def _cyl_x(cx, y, z, width):
-    outer = cq.Solid.makeCylinder(p.HINGE_OD / 2, width,
-                                  Vector(cx - width / 2, y, z), Vector(1, 0, 0))
-    inner = cq.Solid.makeCylinder(p.HINGE_BORE_D / 2, width + 0.6,
-                                  Vector(cx - width / 2 - 0.3, y, z), Vector(1, 0, 0))
-    return cq.Workplane(obj=outer).cut(cq.Workplane(obj=inner))
-
-
-def _cyl_y(x, cy, z, width):
-    outer = cq.Solid.makeCylinder(p.HINGE_OD / 2, width,
-                                  Vector(x, cy - width / 2, z), Vector(0, 1, 0))
-    inner = cq.Solid.makeCylinder(p.HINGE_BORE_D / 2, width + 0.6,
-                                  Vector(x, cy - width / 2 - 0.3, z), Vector(0, 1, 0))
-    return cq.Workplane(obj=outer).cut(cq.Workplane(obj=inner))
-
-
 def frame_dims():
     cavity_w = p.LIGHT_W + p.XY_CLEARANCE
     cavity_h = p.LIGHT_H + p.XY_CLEARANCE
@@ -229,6 +213,12 @@ def _door_profile_rects(side):
     reach = min(depth, p.FRAME_HINGE_SWEEP_REACH)
     leaf = (u_root, u_root + grow * reach,
             -p.DOOR_T / 2, p.DOOR_T / 2 + p.DOOR_RIB_H)
+    # The fork rect starts at the barrel radius, not at the axis, even though
+    # the web and saddle now carry on inboard of it.  Everything they add there
+    # stays inside FRAME_HINGE_FASTENER_R, where the coaxial channel has already
+    # cleared the beam at every angle; taking the rect in to the axis instead
+    # would swing the sector out to +-90 degrees and cut the beam away for
+    # nothing.
     fork = (-sign * r, u_root,
             -p.DOOR_HINGE_WEB_H / 2, p.DOOR_HINGE_WEB_H / 2)
     return leaf, fork
@@ -291,11 +281,70 @@ def _shroud_radius(side):
     return _rect_polar(*_door_profile_rects(side)[0])[0] - p.FRAME_SHROUD_CLEAR
 
 
+def _leaf_half_span(side):
+    """Half-width of the widest thing on this leaf, exactly.
+
+    Kept apart from _leaf_reach because the margin there is only ever safe when
+    it widens a cut.  Asking how far the frame's outline has curved inboard by
+    the time the leaf ends is the other kind of question, and a margin in it
+    demands clearance for a leaf that is not present -- at |x| = 78 the top
+    outline has reached y = 39.66, a 7.39 mm standoff, which is outside the
+    clearance cylinder altogether and would delete the corner wall entirely.
+    """
+    base = (p.TOP_BOTTOM_BASE_W if side in ("top", "bottom") else p.SIDE_BASE_H)
+    return base / 2.0
+
+
 def _leaf_reach(side):
     """Half-width of the widest thing on this leaf, plus a margin.  Outside this
     the leaf simply is not there, at any angle."""
-    base = (p.TOP_BOTTOM_BASE_W if side in ("top", "bottom") else p.SIDE_BASE_H)
-    return base / 2.0 + 1.0
+    return _leaf_half_span(side) + 1.0
+
+
+def _outline_span_start(side):
+    """Span position where the frame outline leaves its straight run and starts
+    round the corner arc.  `span` is x for the top/bottom walls, y for the sides.
+    """
+    ow, oh = frame_dims()
+    half = (ow if side in ("top", "bottom") else oh) / 2.0
+    return half - p.CORNER_RADIUS_OUTER
+
+
+def _outline_u(side, span):
+    """How far out the frame's outline stands at span position `span`, as a
+    magnitude, for the wall on this side.
+
+    Flat at the outer edge along the straight run, then curving inboard round
+    the corner arc.  This is the number the shroud's clearance was missing: the
+    straight run's `edge` is not what the wall stands on near a corner.
+    """
+    ow, oh = frame_dims()
+    edge = (oh if side in ("top", "bottom") else ow) / 2.0
+    s0 = _outline_span_start(side)
+    if abs(span) <= s0:
+        return edge
+    d = min(abs(span) - s0, p.CORNER_RADIUS_OUTER)
+    return edge - p.CORNER_RADIUS_OUTER + math.sqrt(
+        max(0.0, p.CORNER_RADIUS_OUTER ** 2 - d * d))
+
+
+def _shroud_corner_span(side):
+    """Span range over which the outline has curved inboard *and* a leaf can
+    still reach the wall.  Beyond it the leaf is simply not there."""
+    return _outline_span_start(side), _leaf_reach(side)
+
+
+def _shroud_corner_depth(side):
+    """Depth allowed over that corner span.
+
+    Same rule as _shroud_side_depth -- the wall may reach as deep as the
+    clearance cylinder allows -- but measured from the standoff at the leaf's
+    own outer end, which is the worst case anywhere a leaf actually sweeps.
+    """
+    _, ua, va, _, _ = _axis_frame(side)
+    rho = _shroud_radius(side)
+    standoff = abs(ua) - _outline_u(side, _leaf_half_span(side))
+    return abs(va) + math.sqrt(max(0.0, rho * rho - standoff * standoff))
 
 
 def _shroud_side_depth(side):
@@ -328,9 +377,14 @@ def _shroud():
     is the same at every door angle -- which is exactly what a flat skirt cannot
     manage, and why this works away from 90 degrees.
 
-    The corners stay at full depth on purpose.  The leaves are narrower than the
-    frame -- |x| <= 77 against an 82.75 edge, |y| <= 37 against 42.25 -- so
-    nothing sweeps the corners at any angle and there is nothing to clear there.
+    The corners get a second, shallower step of their own.  Revision 10 left
+    them at full depth, reasoning that the leaves are narrower than the frame --
+    |x| <= 77 against an 82.75 edge -- so nothing sweeps them.  That compares the
+    leaf against the wrong number: the outline does not stay at its straight-run
+    edge out there, it curves inboard round CORNER_RADIUS_OUTER, and by |x| = 77
+    it has reached y = 40.36.  That is a 6.69 mm standoff from the hinge axis
+    where the straight run has 4.8, and a standoff that large leaves room for
+    much less depth.  The leaf duly swept the corner wall from 27 degrees on.
 
     The wall sits outboard of the frame's outer face, so it stays clear of the
     plane the closed leaves stack in and leaves the light trap untouched.
@@ -354,8 +408,7 @@ def _shroud():
         about, ua, va, sign, edge = _axis_frame(side)
         reach = _leaf_reach(side)
         # A single flat step back to this side's own depth, across the span the
-        # leaf can reach.  Only that span: the corners stay at full depth, since
-        # the leaves are narrower than the frame and never sweep them.
+        # leaf can reach.
         cut_h = depth + 2 - _shroud_side_depth(side)
         lo, hi = sorted((edge - sign * 1.0, edge + sign * (t + 1.0)))
         if about == "X":
@@ -367,6 +420,30 @@ def _shroud():
                                          centered=(True, True, False))
             box = box.translate(((lo + hi) / 2, 0, -(depth + 2)))
         ring = ring.cut(box)
+
+        # Then a second, shallower step at each end, over the span where the
+        # outline has curved inboard and a leaf still reaches it.  Reaching
+        # further inboard than the first step, too: out there the wall itself
+        # stands inboard of `edge`, so a band starting at edge - 1 misses it.
+        s_lo, s_hi = _shroud_corner_span(side)
+        if s_hi > s_lo:
+            c_h = depth + 2 - _shroud_corner_depth(side)
+            c_lo, c_hi = sorted((sign * (_outline_u(side, s_hi) - 1.0),
+                                 edge + sign * (t + 1.0)))
+            for end in (1, -1):
+                a, b = sorted((end * s_lo, end * s_hi))
+                if about == "X":
+                    box = cq.Workplane("XY").box(b - a, c_hi - c_lo, c_h,
+                                                 centered=(True, True, False))
+                    box = box.translate(((a + b) / 2, (c_lo + c_hi) / 2,
+                                         -(depth + 2)))
+                else:
+                    box = cq.Workplane("XY").box(c_hi - c_lo, b - a, c_h,
+                                                 centered=(True, True, False))
+                    box = box.translate(((c_lo + c_hi) / 2, (a + b) / 2,
+                                         -(depth + 2)))
+                ring = ring.cut(box)
+
         for cut in _fork_slots(side, _shroud_radius(side)):
             ring = ring.cut(cut)
     return ring
@@ -394,18 +471,23 @@ def _fork_slots(side, rho, stations=None):
     flare = (p.DOOR_HINGE_ROOT_W - p.HINGE_FORK_W) / 2.0
 
     near = p.HINGE_FORK_W / 2 + p.FRAME_SHROUD_FORK_CLEAR
-    # Width the web has reached by the time it leaves the shroud.  Held constant
-    # past that rather than carrying on growing, so the slot is never cut wider
-    # than the shroud actually needs.
-    far = near + flare * min(1.0, max(0.0, (rho - r) / (u_root - r)))
+    # The flare runs from the barrel out to the web's own root radius and stops
+    # there, so that -- not `rho` -- is where the taper ends.  `rho` is a
+    # different quantity: how far this cut has to reach.  Interpolating the
+    # taper to it stretched a 4 -> 7.8 flare over 4 -> 24 for the beam, so the
+    # slot came out 2.86 mm half-width where the web is 5.5, and the doors could
+    # not be pressed onto their axes at all.  Where rho is inside u_root, as it
+    # is for the shroud, the two agree and the slot is unchanged.
+    r_flare = min(u_root, rho)
+    far = near + flare * (r_flare - r) / (u_root - r)
 
     cuts = []
     for station in (_stations(about) if stations is None else stations):
         for c in (station - off, station + off):
             # Constant width inside the barrel radius, then the flare.
             pts = [(c - near, va), (c + near, va), (c + near, va + r),
-                   (c + far, va + rho), (c + far, va + rho + 2.0),
-                   (c - far, va + rho + 2.0), (c - far, va + rho),
+                   (c + far, va + r_flare), (c + far, va + rho + 2.0),
+                   (c - far, va + rho + 2.0), (c - far, va + r_flare),
                    (c - near, va + r)]
             sol = (cq.Workplane(_REVOLVE_PLANE[about])
                    .polyline(pts).close()
@@ -437,44 +519,66 @@ def _panel_rib_from_polygon(pts, z0):
     return panel.union(rib.cut(inner))
 
 
-def _door_x_forks(model, side, root_y):
-    _, y, z = hinge_axis(side)
-    sign = 1 if side == "top" else -1
-    r = p.HINGE_OD / 2
-    for cx in p.HORIZONTAL_HINGE_STATIONS:
-        off = p.HINGE_CENTER_W / 2 + p.HINGE_AXIAL_GAP + p.HINGE_FORK_W / 2
-        for kx in (cx - off, cx + off):
-            model = model.union(_cyl_x(kx, y, z, p.HINGE_FORK_W))
-            barrel_tangent = y - sign * r
-            half_fork = p.HINGE_FORK_W / 2
-            half_root = p.DOOR_HINGE_ROOT_W / 2
-            # Top grows toward -Y, bottom toward +Y.
-            pts = [(kx-half_fork, barrel_tangent), (kx+half_fork, barrel_tangent),
-                   (kx+half_root, root_y), (kx-half_root, root_y)]
-            web = (cq.Workplane("XY").polyline(pts).close()
-                   .extrude(p.DOOR_HINGE_WEB_H)
-                   .translate((0, 0, z - p.DOOR_HINGE_WEB_H/2)))
-            model = model.union(web)
-    return model
+def _leaf_side_half_space(about, ua, sign, big=400.0):
+    """Everything on the leaf's side of the hinge axis plane."""
+    box = cq.Workplane("XY").box(big, big, big)
+    return (box.translate((0, ua - sign * big / 2, 0)) if about == "X"
+            else box.translate((ua - sign * big / 2, 0, 0)))
 
 
-def _door_y_forks(model, side, root_x):
-    x, _, z = hinge_axis(side)
-    sign = 1 if side == "right" else -1
+def _door_forks(model, side, root_u):
+    """The door's fork knuckles and the webs that carry them to the leaf.
+
+    Revision 11.  The web used to run from the leaf root only as far as the
+    barrel's tangent plane.  A plane tangent to a circle meets it along a line
+    of zero area, so the knuckle never fused to the web at all: every door came
+    out as a leaf plus four loose 125 mm3 rings, and a printed one would have
+    had a crack the length of the joint waiting to split along the layers.
+
+    Two things fix it.  The web now runs through to the hinge axis, so it
+    engulfs the barrel instead of butting it; and a saddle -- the outboard half
+    of a slightly fatter cylinder on the same axis -- carries material over the
+    whole of the ring's outer face rather than one line of it.
+
+    The saddle costs nothing in clearance because of what it is.  Being
+    concentric with the hinge axis it is a surface of revolution, so it keeps
+    the same DOOR_HINGE_SADDLE_CLEAR gap inside the frame's FRAME_HINGE_FASTENER_R
+    channel at every door angle, exactly as the shroud tip does against the leaf
+    root.  Nothing on the frame has to know about it.
+    """
+    about, ua, va, sign, _ = _axis_frame(side)
     r = p.HINGE_OD / 2
-    for cy in p.VERTICAL_HINGE_STATIONS:
-        off = p.HINGE_CENTER_W / 2 + p.HINGE_AXIAL_GAP + p.HINGE_FORK_W / 2
-        for ky in (cy - off, cy + off):
-            model = model.union(_cyl_y(x, ky, z, p.HINGE_FORK_W))
-            barrel_tangent = x - sign * r
-            half_fork = p.HINGE_FORK_W / 2
-            half_root = p.DOOR_HINGE_ROOT_W / 2
-            pts = [(barrel_tangent, ky-half_fork), (barrel_tangent, ky+half_fork),
-                   (root_x, ky+half_root), (root_x, ky-half_root)]
-            web = (cq.Workplane("XY").polyline(pts).close()
-                   .extrude(p.DOOR_HINGE_WEB_H)
-                   .translate((0, 0, z - p.DOOR_HINGE_WEB_H/2)))
-            model = model.union(web)
+    saddle_r = p.FRAME_HINGE_FASTENER_R - p.DOOR_HINGE_SADDLE_CLEAR
+    off = p.HINGE_CENTER_W / 2 + p.HINGE_AXIAL_GAP + p.HINGE_FORK_W / 2
+    half_fork = p.HINGE_FORK_W / 2
+    half_root = p.DOOR_HINGE_ROOT_W / 2
+    tangent = ua - sign * r
+    centres = [station + d
+               for station in _stations(about) for d in (-off, off)]
+    leaf_side = _leaf_side_half_space(about, ua, sign)
+
+    for c in centres:
+        model = model.union(_axis_cylinder(about, ua, va, c, r, p.HINGE_FORK_W))
+        model = model.union(
+            _axis_cylinder(about, ua, va, c, saddle_r, p.HINGE_FORK_W)
+            .intersect(leaf_side))
+        # Fork-width in as far as the axis, flaring only once clear of the
+        # barrel -- inside it the slot the web passes through is parallel-sided.
+        pts = [(c - half_fork, ua), (c + half_fork, ua),
+               (c + half_fork, tangent), (c + half_root, root_u),
+               (c - half_root, root_u), (c - half_fork, tangent)]
+        if about == "Y":
+            pts = [(u, a) for a, u in pts]
+        model = model.union(cq.Workplane("XY").polyline(pts).close()
+                            .extrude(p.DOOR_HINGE_WEB_H)
+                            .translate((0, 0, va - p.DOOR_HINGE_WEB_H / 2)))
+
+    # The bore comes out of the finished fork, not out of the ring on its own:
+    # the web and saddle now cross the bolt axis, so cutting it any earlier
+    # would just have it filled back in.
+    for c in centres:
+        model = model.cut(_axis_cylinder(about, ua, va, c, p.HINGE_BORE_D / 2,
+                                         p.HINGE_FORK_W + 0.6))
     return model
 
 
@@ -495,7 +599,7 @@ def build_door(side):
         wb, wt = p.TOP_BOTTOM_BASE_W, p.TOP_BOTTOM_TIP_W
         pts = [(-wb/2, root_y), (wb/2, root_y), (wt/2, tip_y), (-wt/2, tip_y)]
         model = _panel_rib_from_polygon(pts, z0)
-        return _door_x_forks(model, side, root_y)
+        return _door_forks(model, side, root_y)
 
     x, _, z = hinge_axis(side)
     z0 = z - p.DOOR_T / 2
@@ -505,4 +609,4 @@ def build_door(side):
     hb, ht = p.SIDE_BASE_H, p.SIDE_TIP_H
     pts = [(root_x, -hb/2), (root_x, hb/2), (tip_x, ht/2), (tip_x, -ht/2)]
     model = _panel_rib_from_polygon(pts, z0)
-    return _door_y_forks(model, side, root_x)
+    return _door_forks(model, side, root_x)

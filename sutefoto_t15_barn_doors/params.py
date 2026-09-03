@@ -92,6 +92,16 @@ FRAME_SHROUD_FORK_CLEAR = 0.6
 DOOR_HINGE_ROOT_W = 11.0
 DOOR_HINGE_ROOT_DEPTH = 10.0
 DOOR_HINGE_WEB_H = 5.2
+# Revision 11.  The web used to stop at the barrel's tangent plane, which meets
+# the knuckle along a line of zero area: the two never fused, and every door
+# exported as a leaf plus four loose rings.  The web now runs through to the
+# hinge axis and a saddle carries material over the whole outboard half of the
+# knuckle.  The saddle is a cylinder concentric with the hinge axis, so like the
+# shroud tip it is a surface of revolution -- its clearance inside the frame's
+# FRAME_HINGE_FASTENER_R channel is the same at every door angle, which is what
+# lets it be added without touching the frame.  This is the radial part of that
+# clearance; the saddle radius is FRAME_HINGE_FASTENER_R minus it.
+DOOR_HINGE_SADDLE_CLEAR = 0.3
 
 # Door leaves.
 DOOR_T = 2.4
