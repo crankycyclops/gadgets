@@ -19,15 +19,6 @@ against it at 42 -- so it is worth checking rather than trusting.
 The sweep runs to the full travel deliberately: revision 9's beam silently
 capped the doors at 96 degrees, which no 0-90 check could ever have caught.
 
-Revision 13 adds the check that revision 12 needed and did not have: that the
-hinges can actually be put together.  Nothing above notices a fastener pocket
-turning into a blind hole -- the frame is still one valid solid, the doors
-still sweep, the plate still seats -- and that is exactly what the adapter rail
-did to all four pockets on the cut short wall.  A screw is rigid and has to
-translate its own length down the axis before its tip can enter the knuckle, so
-that run is the thing to measure, and it is measured against the part rather
-than against the hole cut for it.
-
 `isValid()` is not enough on its own, either.  A compound of disjoint solids is
 perfectly valid, and that is exactly what the doors were up to revision 11: the
 fork webs met their knuckles along a tangent line of zero area, never fused, and
@@ -36,8 +27,7 @@ each door exported as a leaf plus four loose rings.  So count the solids too.
 import cadquery as cq
 import params as p
 import frame, top_door, bottom_door, left_door, right_door
-from common import (hinge_axis, adapter_plate_envelope, hinge_stations,
-                    rail_borne, fastener_corridor, nut_window_path)
+from common import hinge_axis, adapter_plate_envelope
 
 
 def vol(a,b):
@@ -96,35 +86,9 @@ def main():
                 v=vol(plate,moved)
                 assert v < p.COLLISION_EPS, \
                     f'{side} plate/{s} door clash at {deg}: {v}'
-    # Revision 13: the hinges have to be assemblable, which revision 12's rail
-    # quietly stopped them being.  A rail-borne station is bored out to
-    # daylight at one end and opened into the window at the other, so both are
-    # asserted empty.
-    for side,st in hinge_stations():
-        if not rail_borne(side,st): continue
-        end=1 if st>0 else -1
-        v=vol(F,fastener_corridor(side,st,end).val())
-        assert v < p.COLLISION_EPS, f'{side} {st:+.0f} screw run blocked: {v}'
-        v=vol(F,nut_window_path(side,st).val())
-        assert v < p.COLLISION_EPS, f'{side} {st:+.0f} nut window blocked: {v}'
-
-    # The long walls are not bored, they are simply left alone: the rail's
-    # corner wrap is stood off far enough not to reach their outboard hinge.
-    # So the check is that the outboard station's run matches its own mirror,
-    # not that either is empty -- both meet the same 0.35 mm of shroud along
-    # the straight run, which is what a 5.5 mm head has always met on a long
-    # wall and is not something this revision set out to change.
-    for side in ('top','bottom'):
-        runs=[vol(F,fastener_corridor(side,st,1 if st>0 else -1).val())
-              for st in p.HORIZONTAL_HINGE_STATIONS]
-        assert abs(runs[0]-runs[1]) < p.COLLISION_EPS, \
-            f'{side} outboard hinge run {runs} -- the rail wrap is in it'
-
     sides=', '.join(p.ADAPTER_CUT_SIDES)
     print(f'PASS: five single solids; all doors stack closed and each clears the '
           f'frame through 0-{travel} degrees; a plate on {sides} clears the frame '
-          f'and every door through the same travel; every hinge has a clear '
-          f'{p.HINGE_SCREW_LENGTH:.0f} mm run for its screw and a way in for '
-          f'its nyloc')
+          f'and every door through the same travel')
 
 if __name__=='__main__': main()

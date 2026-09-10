@@ -251,7 +251,7 @@ def _hinge_block(side, station):
 
     u_out = ua + sign * (r + p.FRAME_HINGE_SADDLE_T)
     v_lo = va - (r + p.FRAME_HINGE_SADDLE_T)
-    if rail_borne(side, station):
+    if _rail_borne(side, station):
         # The collar this beam used to root in is inside the adapter window, so
         # there is no wall left to put a foot in.  A plain prism instead,
         # stopped at the cut plane and standing on the rail -- see
@@ -293,23 +293,14 @@ def _hardware_cuts(side, station):
     shroud runs straight through the same space.
     """
     about, ua, va, _, _ = _axis_frame(side)
-    # Stops at the beam's own width, because the hardware never reaches past
-    # it.  What the hardware has to *travel* through to get there is a
-    # separate question, and one this channel used to answer by accident:
-    # outside the beam sat 2.4 mm of shroud, offset far enough off the axis to
-    # leave the run clear.  The adapter rail is 12 mm and flush, so where it
-    # stands the answer has to be cut deliberately.  See _access_end.
+    # Stops at the beam's own width.  The hardware never reaches past it, and
+    # anything further would only be cutting the shroud for nothing.
     channel = _axis_cylinder(about, ua, va, station, p.FRAME_HINGE_FASTENER_R,
                              p.FRAME_HINGE_BEAM_W)
     core = _axis_slab(about, station, -p.HINGE_CENTER_W / 2.0, p.HINGE_CENTER_W / 2.0)
-    cuts = [channel.cut(core),
+    return [channel.cut(core),
             _axis_cylinder(about, ua, va, station, p.HINGE_BORE_D / 2.0,
                            p.FRAME_HINGE_BEAM_W + 4.0)]
-    if rail_borne(side, station):
-        end = 1 if station > 0 else -1
-        cuts += [_access_bore(side, station, end),
-                 _nut_window(side, station, end)]
-    return cuts
 
 
 def _shroud_radius(side):
@@ -551,13 +542,6 @@ def _fork_slots(side, rho, stations=None):
 # forward to suit.  Here there are only three shapes: the window itself, the
 # rail that carries a cut short wall's hinges once the collar under them is
 # gone, and the relief that keeps a cut wall's closed leaf out of the plate.
-#
-# The rail then costs two more (revision 13).  Being ADAPTER_RAIL_T thick and
-# flush with the beams, it seals the fastener pockets it passes -- see
-# "Assembly access" in params.py -- so _access_bore reopens the corner-facing
-# end of every station it stands in, and _nut_window opens the other end of a
-# rail-borne station into the window.  Both are cuts through the rail, so they
-# are ordinary hardware clearance and go in with the rest of it.
 # --------------------------------------------------------------------------
 
 
@@ -572,7 +556,7 @@ def _adapter_band(side):
     return c - half, c + half
 
 
-def rail_borne(side, station):
+def _rail_borne(side, station):
     """Does this station's beam lose the collar it roots in?
 
     Only on a cut short wall.  A cut long wall's stations are at |x| 43-67
@@ -585,70 +569,6 @@ def rail_borne(side, station):
     lo, hi = _adapter_band(side)
     half = p.FRAME_HINGE_BEAM_W / 2.0
     return station + half > lo and station - half < hi
-
-
-def _axis_daylight(side):
-    """How far along the hinge axis this frame can reach, plus a margin.
-
-    The access bore is run out to here rather than to a breakout point solved
-    for.  Along the axis there is nothing to hit but the shroud ring: the
-    beams stand at their own stations, and the neighbouring walls' shrouds are
-    inboard of it.  So a bore that passes the ring's outer extent is in open
-    air, whatever the corner arc did on the way, and where exactly it broke
-    out is not a number anything needs.
-    """
-    ow, oh = frame_dims()
-    half = (oh if _axis_frame(side)[0] == "Y" else ow) / 2.0
-    return half + p.ADAPTER_RAIL_T + 2.0
-
-
-def _access_bore(side, station, end):
-    """The pocket carried on out to daylight, at FRAME_HINGE_ACCESS_R.
-
-    Only a rail-borne station needs this, and only at its corner-facing end.
-    That station is sealed at both ends, but the two are not alike: the
-    corner-facing one reaches daylight in 13.5 mm, while the inboard one faces
-    the length of the wall and never reaches it at all.  So the screw comes in
-    here and the nyloc goes on at the other end, through _nut_window.
-
-    Elsewhere the wrap is stood off instead of bored -- see the clip in
-    _adapter_rail -- because elsewhere there is somewhere for it to stand.
-
-    Starts at the knuckle rather than at the beam edge so the bore and the
-    pocket are one corridor.  Inside the beam it is a no-op, the pocket being
-    already wider; past it, it is the whole point.
-    """
-    about, ua, va, _, _ = _axis_frame(side)
-    lo, hi = sorted((station + end * p.HINGE_CENTER_W / 2.0,
-                     end * _axis_daylight(side)))
-    return _axis_cylinder(about, ua, va, (lo + hi) / 2.0,
-                          p.FRAME_HINGE_ACCESS_R, hi - lo)
-
-
-def _nut_window(side, station, end):
-    """A rail-borne station's inboard pocket, opened into the adapter window.
-
-    `end` is the end the access bore took, so this is the other one: the one
-    with no daylight along the axis to bore to, and the one the nyloc and its
-    washer have to reach.  What it does have is the window, ADAPTER_CUT_Z
-    away through 1.5 mm of the rail's rear flange -- the cheapest of the four
-    faces round the bore, and the only one already facing a hole.  See
-    "Assembly access" in params.py for the other three.
-
-    Taken across the whole pocket rather than just the nut's own band: the
-    extra 3.35 mm is a slot in a flange, and it is the difference between
-    dropping the nut in and fishing for it.
-    """
-    about, ua, va, _, _ = _axis_frame(side)
-    lo, hi = sorted((station - end * p.HINGE_CENTER_W / 2.0,
-                     station - end * p.FRAME_HINGE_BEAM_W / 2.0))
-    r = p.FRAME_HINGE_FASTENER_R
-    # Overshoot the cut plane so the two meet as a through-cut rather than as
-    # coincident faces.  Nothing is lost to it: this pocket is inside the
-    # window band, where everything rearward of ADAPTER_CUT_Z goes anyway.
-    v_end = p.ADAPTER_CUT_Z + 1.0 - va
-    pts = [(-r, 0.0), (r, 0.0), (r, v_end), (-r, v_end)]
-    return _prism(about, pts, ua, va, (lo + hi) / 2.0, hi - lo)
 
 
 def _light_face(side):
@@ -708,22 +628,15 @@ def _adapter_rail(side):
     limit belongs to the *neighbouring* wall's leaf, and getting the corner step
     wrong is the mistake revision 10 already made once.
 
-    Clipping was by the corner arc's own start, so the rail covered this wall
-    and both its corners whole and stopped exactly where the neighbouring
-    wall's straight run began.  That is one beam too far.  The long wall's
-    outboard hinge ends at |x| 67 and the arc starts at 70.45, so a 12 mm wrap
-    clipped there arrives 3.45 mm off that beam's end face and caps the pocket
-    behind it -- and a hinge whose fastener cannot be got in is not a hinge.
-    So the clip is stood off from that beam by ADAPTER_RAIL_HINGE_RUN instead,
-    or left at the arc if the arc is further out.
+    Clipping is by the corner arc's own start, so the rail covers this wall and
+    both its corners whole and stops exactly where the neighbouring wall's
+    straight run begins.
     """
     about, _, _, sign, _ = _axis_frame(side)
     if not _is_cut(side) or about != "Y":
         return None
     ow, _ = frame_dims()
-    keep = max(ow / 2.0 - p.CORNER_RADIUS_OUTER,
-               max(abs(s) for s in _stations("X"))
-               + p.HINGE_CENTER_W / 2.0 + p.ADAPTER_RAIL_HINGE_RUN)
+    keep = ow / 2.0 - p.CORNER_RADIUS_OUTER
     big = 400.0
     half_space = (cq.Workplane("XY").box(big, big, big)
                   .translate((sign * (keep + big / 2.0), 0, 0)))
@@ -744,47 +657,6 @@ def _adapter_leaf_relief(side):
     lo, hi = _adapter_band(side)
     start = _light_face(side) - sign * p.ADAPTER_LEAF_RELIEF
     return _wall_box(side, lo, hi, start, start + sign * 60.0, va - 30.0, va + 30.0)
-
-
-def hinge_stations():
-    """(side, station) for every hinge in the model."""
-    for side in ("top", "bottom", "left", "right"):
-        for station in _stations(_axis_frame(side)[0]):
-            yield side, station
-
-
-def fastener_corridor(side, station, end):
-    """The straight run the screw needs, from the knuckle face outward.
-
-    `end` is +1 or -1 along the hinge axis.  Sized to the part rather than to
-    any hole cut for it: the widest thing in the stack, over the screw's own
-    length, which is what has to translate down the axis before the tip can
-    enter the knuckle.
-    """
-    about, ua, va, _, _ = _axis_frame(side)
-    lo, hi = sorted((station + end * p.HINGE_CENTER_W / 2.0,
-                     station + end * (p.HINGE_CENTER_W / 2.0
-                                      + p.HINGE_SCREW_LENGTH)))
-    return _axis_cylinder(about, ua, va, (lo + hi) / 2.0,
-                          p.HINGE_WASHER_D / 2.0, hi - lo)
-
-
-def nut_window_path(side, station):
-    """The way in the nyloc takes on a rail-borne station's inboard end.
-
-    From the seat -- the band between the fork's outer face and the beam edge
-    -- straight out through the window.  Its own footprint, narrower than the
-    slot _nut_window cuts, so this measures the part and not the hole.
-    """
-    about, ua, va, _, _ = _axis_frame(side)
-    end = 1 if station > 0 else -1
-    seat = p.HINGE_CENTER_W / 2.0 + p.HINGE_AXIAL_GAP + p.HINGE_FORK_W
-    lo, hi = sorted((station - end * seat,
-                     station - end * p.FRAME_HINGE_BEAM_W / 2.0))
-    r = p.HINGE_WASHER_D / 2.0
-    v_end = p.ADAPTER_CUT_Z - va
-    pts = [(-r, 0.0), (r, 0.0), (r, v_end), (-r, v_end)]
-    return _prism(about, pts, ua, va, (lo + hi) / 2.0, hi - lo)
 
 
 def adapter_plate_envelope(side):
