@@ -15,5 +15,5 @@ PARTS = {
 for name, fn in PARTS.items():
     obj = fn()
     cq.exporters.export(obj, str(OUT / f"{name}.stl"))
-    cq.exporters.export(obj, str(OUT / f"{name}.step"))
+    #cq.exporters.export(obj, str(OUT / f"{name}.step"))
     print(name)

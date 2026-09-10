@@ -28,6 +28,9 @@ Minimum section between barrel and frame:
 | bottom | 6.2 mm² | 171 mm² | 206 mm² |
 | left / right | 4.6 mm² | 171 mm² | 208 mm² |
 
+These no longer describe the part as built — see
+[Beams cut back to the knuckle](#beams-cut-back-to-the-knuckle).
+
 `HINGE_CENTER_W` also goes 5 mm → 8 mm, which is what sets how wide the beam can be where it actually grips the barrel. The door forks are positioned from it and move outboard to suit. **This changes the screw length — see below.**
 
 The beam is built deliberately over-fat and then cut back by the volume the doors sweep, so clearance is derived rather than guessed, and the cut is a single swept sector rather than a stack of radial bands — bands leave a staircase of thin teeth down the slot edge. A coaxial channel of radius `FRAME_HINGE_FASTENER_R` either side of the centre knuckle clears the fork barrels, washers and nyloc.
@@ -60,6 +63,39 @@ Three things matter to how much it covers:
 Measured as blocked area against the raw gap: **74 %** overall — top 69 %, bottom 76 %, sides 76 %. What is left is the `FRAME_SHROUD_CLEAR` running gap plus the slots where the door forks pass through. Narrowing the fork flare (`DOOR_HINGE_ROOT_W`) to close those slots was measured and returns only 3 %, which is not worth weakening the door for.
 
 **Assembly note:** `FRAME_HINGE_FASTENER_R` dropped 5.5 → 4.6 mm, because this channel cuts through the shroud as well as the beam and every 0.1 mm of it costs coverage. It still clears the fork barrels, an M3 washer and an M3 nyloc, but there is no longer room to bring a socket down the bolt axis past the shroud — hold the nyloc with a thin open-end spanner from the front instead.
+
+## Beams cut back to the knuckle
+
+Revision 9's beam wrapped the barrel across its whole 24 mm width, and the
+`FRAME_HINGE_FASTENER_R` channel then bored the middle out of it either side of
+the knuckle. What that left standing was a pair of crescents per station —
+partial knuckles spanning the channel out to the leaf's root radius, tapering to
+a feather edge where the sweep sector's boundary ran down tangent to the
+channel. Nothing hangs off them: the door is carried entirely by
+`HINGE_CENTER_W`, and no fork ever reaches them. What they did do was close the
+one side a spanner could get to the nyloc from, and stand ready to snap off.
+
+Outside the knuckle the beam now stops dead at the channel's rear tangent plane,
+`FRAME_HINGE_FASTENER_R` behind the hinge axis. Because the plane is tangent,
+the channel takes nothing out of the beam there at all, so the step is a flat
+full-thickness face rather than another thin edge, and everything forward of it —
+fork, washer, nyloc, spanner — is in open air.
+
+The bolt hole was also cut back. At `FRAME_HINGE_BEAM_W + 4` it stood 2 mm proud
+of both ends of every beam; on the short wall, where the beams stand on the
+adapter rail, that meant four blind holes drilled into the one member holding
+those hinges up. It only ever had to clear the knuckle, so it now runs
+`HINGE_CENTER_W + 4` and both ends land inside the channel, in space that is
+already empty.
+
+The cost is section. Measured as the least cross-section on any plane between
+the barrel's rear tangent and the beam's footing — the collar's front face, or
+`ADAPTER_CUT_Z` where the beam stands on the rail — every station goes from
+173 mm² to 82 mm², a 53 % loss, since the load now crosses the 8 mm knuckle
+alone. That is still an order of magnitude above the 4.6–9.5 mm² of the
+revision 8 hinges that actually peeled off. `HINGE_CENTER_W` is the number to
+raise if it wants more; it sets the tongue's width directly, and the door forks
+are positioned from it.
 
 ## Keep your fit tuning
 

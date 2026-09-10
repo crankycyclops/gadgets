@@ -277,6 +277,28 @@ def _hinge_block(side, station):
     # plate that never comes nearer the axis than its root radius.
     block = block.cut(_sweep_wedge(side, station, span, (leaf,), leaf_rmin))
 
+    # Only the centre knuckle has any business reaching round the barrel.  The
+    # door hangs entirely off HINGE_CENTER_W; the bands either side of it carry
+    # nothing, because no fork ever touches them.  Left standing they came out
+    # as partial knuckles -- crescents of wall spanning the fastener channel to
+    # the leaf's root radius, and tapering to a feather edge where the sweep
+    # sector's boundary ran down tangent to the channel.  They boxed in the
+    # nyloc from the one side a spanner could reach it, and the feathered ends
+    # would have snapped off the moment they were handled.
+    #
+    # So outside the knuckle the beam stops dead at the channel's rear tangent
+    # plane.  Being tangent, the channel then takes nothing out of the beam
+    # there at all, which is what leaves a flat full-thickness face rather than
+    # another thin edge -- and everything forward of it, the whole M3 stack
+    # included, is open to a spanner from the front.
+    z_step = va + p.FRAME_HINGE_FASTENER_R
+    big = 400.0
+    forward = (cq.Workplane("XY").box(big, big, big)
+               .translate((0, 0, z_step - big / 2.0)))
+    core = _axis_slab(about, station, -p.HINGE_CENTER_W / 2.0,
+                      p.HINGE_CENTER_W / 2.0)
+    block = block.cut(forward.cut(core))
+
     # The forks do reach the barrel, but only where they actually are.  Cutting
     # the full beam width down to the barrel is what left the saddle as a thin
     # hook tapering to a point; keeping it to the forks' own flared footprint
@@ -298,9 +320,15 @@ def _hardware_cuts(side, station):
     channel = _axis_cylinder(about, ua, va, station, p.FRAME_HINGE_FASTENER_R,
                              p.FRAME_HINGE_BEAM_W)
     core = _axis_slab(about, station, -p.HINGE_CENTER_W / 2.0, p.HINGE_CENTER_W / 2.0)
+    # The bore only has to clear the knuckle, which is the only thing the
+    # channel leaves standing on the axis.  Run at FRAME_HINGE_BEAM_W + 4 it
+    # stood 2 mm proud of both ends of the beam, and on a wall carrying an
+    # adapter rail those 2 mm are solid: four blind holes drilled into the one
+    # member holding that wall's hinges up.  Ending inside the channel instead
+    # puts both ends of the bore in space that is already empty.
     return [channel.cut(core),
             _axis_cylinder(about, ua, va, station, p.HINGE_BORE_D / 2.0,
-                           p.FRAME_HINGE_BEAM_W + 4.0)]
+                           p.HINGE_CENTER_W + 4.0)]
 
 
 def _shroud_radius(side):
