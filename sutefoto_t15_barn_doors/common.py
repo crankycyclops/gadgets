@@ -659,6 +659,46 @@ def _adapter_leaf_relief(side):
     return _wall_box(side, lo, hi, start, start + sign * 60.0, va - 30.0, va + 30.0)
 
 
+def _relief_reaches_forks(side):
+    """Does a cut wall's leaf relief cross that wall's own fork webs?
+
+    True on a cut short wall, whose stations sit at |y| 23 against a 33.25
+    half-band, and false on a cut long wall, whose stations stand at |x| 55
+    well outside it.  The same split as `_rail_borne`, and for the same reason:
+    the window is cut in a 84.5 mm wall on one side and a 165.5 mm wall on the
+    other, so it swallows the short wall's hinges and misses the long wall's.
+    """
+    if not _is_cut(side):
+        return False
+    lo, hi = _adapter_band(side)
+    off = p.HINGE_CENTER_W / 2 + p.HINGE_AXIAL_GAP + p.HINGE_FORK_W / 2
+    half = p.DOOR_HINGE_ROOT_W / 2
+    return any(c + half > lo and c - half < hi
+               for station in _stations(_axis_frame(side)[0])
+               for c in (station - off, station + off))
+
+
+def _relieved_leaf_root(side, root):
+    """The edge a wall's fork webs actually have to root on.
+
+    Normally the lap's own edge, LIGHT_TRAP_OVERLAP inside the frame's outer
+    edge.  Over an adapter window the lap is pulled back to
+    ADAPTER_LEAF_RELIEF inboard of the light's face instead, and where that
+    reaches the forks they have to follow it or they root on an edge that is
+    no longer there.
+
+    Rooting them 1.75 mm outboard of it is not a small gap but a severance,
+    because _adapter_leaf_relief is a box running from the light's face
+    *outward*: everything of the door's standing out there goes with the lap.
+    That is what happened to the right door, which came out a bare leaf with
+    all four webs, barrels and saddles cut off it -- and passed every check,
+    because a bare leaf is still one solid and collides with nothing.
+    """
+    if not _relief_reaches_forks(side):
+        return root
+    return _light_face(side) - _axis_frame(side)[3] * p.ADAPTER_LEAF_RELIEF
+
+
 def adapter_plate_envelope(side):
     """The seated plate as a solid, for the assembly checks.
 
@@ -777,30 +817,31 @@ def build_door(side):
     colliding.  Opening is a 90-degree rotation away from the diffuser.
 
     A leaf on a wall with an adapter window gets its lap relieved over the
-    window -- see _adapter_leaf_relief.
+    window -- see _adapter_leaf_relief.  That relief goes in before the forks
+    rather than after, because it is a box running from the light's face
+    outward and the forks stand out there: applied last it does not relieve
+    them, it deletes them.  The webs then root on the relieved edge, which is
+    what _relieved_leaf_root is for.
     """
     ow, oh = frame_dims()
     if side in ("top", "bottom"):
         _, _, z = hinge_axis(side)
         z0 = z - p.DOOR_T / 2
         s = 1 if side == "top" else -1
-        root_y = s * (oh / 2 - p.LIGHT_TRAP_OVERLAP)
-        tip_y = root_y - s * p.TOP_BOTTOM_DEPTH
+        root = s * (oh / 2 - p.LIGHT_TRAP_OVERLAP)
+        tip_y = root - s * p.TOP_BOTTOM_DEPTH
         wb, wt = p.TOP_BOTTOM_BASE_W, p.TOP_BOTTOM_TIP_W
-        pts = [(-wb/2, root_y), (wb/2, root_y), (wt/2, tip_y), (-wt/2, tip_y)]
-        model = _panel_rib_from_polygon(pts, z0)
-        model = _door_forks(model, side, root_y)
+        pts = [(-wb/2, root), (wb/2, root), (wt/2, tip_y), (-wt/2, tip_y)]
     else:
         x, _, z = hinge_axis(side)
         z0 = z - p.DOOR_T / 2
         s = 1 if side == "right" else -1
-        root_x = s * (ow / 2 - p.LIGHT_TRAP_OVERLAP)
-        tip_x = root_x - s * p.SIDE_DEPTH
+        root = s * (ow / 2 - p.LIGHT_TRAP_OVERLAP)
+        tip_x = root - s * p.SIDE_DEPTH
         hb, ht = p.SIDE_BASE_H, p.SIDE_TIP_H
-        pts = [(root_x, -hb/2), (root_x, hb/2), (tip_x, ht/2), (tip_x, -ht/2)]
-        model = _panel_rib_from_polygon(pts, z0)
-        model = _door_forks(model, side, root_x)
+        pts = [(root, -hb/2), (root, hb/2), (tip_x, ht/2), (tip_x, -ht/2)]
 
+    model = _panel_rib_from_polygon(pts, z0)
     if _is_cut(side):
         model = model.cut(_adapter_leaf_relief(side))
-    return model
+    return _door_forks(model, side, _relieved_leaf_root(side, root))
