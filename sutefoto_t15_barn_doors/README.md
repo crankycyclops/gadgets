@@ -56,7 +56,7 @@ The shroud is one wall following the frame's whole outline, standing forward fro
 
 Three things matter to how much it covers:
 
-- **The corners stay at full depth.** The leaves are narrower than the frame (|x| ≤ 77 against an 82.75 edge, |y| ≤ 37 against 42.25), so nothing sweeps the corners at any angle and there is nothing there to clear.
+- **The corners are levelled.** Each wall's depth steps run only as far as its own leaf reaches (|x| ≤ 78, |y| ≤ 38), and past both of them nothing sweeps the corner at any angle. That piece used to be left at the full ring depth, a fin standing 7 mm proud of the corner step at the top corners and 12 mm at the bottom; it is now cut to the shallower of the two neighbouring corner steps. The adapter rail is the exception: it keeps its corners at full depth, because that is what it roots in, and starts only at |x| = 78 so the long-wall hinges beside it have room to start their nuts.
 - **The depth limit is one flat step per side, not the cylinder itself.** Following the cylinder buys about 1.4 mm more depth on the outboard half of the wall and costs a tapered, pointed edge to get it. A flat bottom per side, set by the wall's *inboard* face — the part nearest the leaf — is simpler to print and to look at.
 - **It applies only where a leaf can reach.** Trimming to the cylinder everywhere would also delete the wall between the front face and the *top* of that cylinder; on the sides the cylinder does not begin until z = −4.9, so a naive trim throws away 5.9 mm of wall along the whole run to clear a door that is never there.
 

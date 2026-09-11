@@ -422,15 +422,17 @@ def _shroud_depth():
                for s in ("top", "bottom", "left", "right"))
 
 
-def _shroud(t=None, sector_forks=False):
+def _shroud(t=None, sector_forks=False, level_corners=True):
     """One wall following the frame's whole outline, standing forward from the
     front face, to block the light that otherwise pours out of the frame/leaf
     gap when a door is open.
 
-    `t` overrides FRAME_SHROUD_T, and `sector_forks` takes the fork slots as
-    swept sectors rather than full turns.  Both exist for `_adapter_rail`, which
-    needs this same wall -- same outline, same per-side and per-corner depth
-    steps -- only thicker and not severed by its own slots.  Deriving the rail
+    `t` overrides FRAME_SHROUD_T, `sector_forks` takes the fork slots as swept
+    sectors rather than full turns, and `level_corners=False` leaves the
+    corners at full depth.  All three exist for `_adapter_rail`, which needs
+    this same wall -- same outline, same per-side and per-corner depth steps --
+    only thicker, not severed by its own slots, and with its corners kept whole
+    to root in.  Deriving the rail
     from here rather than re-writing the steps is the whole point: the corner
     step is the one the shroud got wrong in revision 10, and a rail that wraps
     the corners has to get it right for two walls at once.
@@ -449,6 +451,15 @@ def _shroud(t=None, sector_forks=False):
     it has reached y = 40.36.  That is a 6.69 mm standoff from the hinge axis
     where the straight run has 4.8, and a standoff that large leaves room for
     much less depth.  The leaf duly swept the corner wall from 27 degrees on.
+
+    Those steps only run out to each wall's own leaf reach, though, and the
+    ring is built at the deepest wall's depth.  So the piece of corner past
+    both neighbours' reach was never stepped at all, and stood as a fin at full
+    depth above the corner step either side of it -- 7 mm proud at the top
+    corners, 12 mm at the bottom.  No leaf reaches it, so it is levelled to the
+    shallower of the two corner steps it sits between.  `_adapter_rail` turns
+    that off: on the rail the full-depth corner is not a fin but what the rail
+    roots in.
 
     The wall sits outboard of the frame's outer face, so it stays clear of the
     plane the closed leaves stack in and leaves the light trap untouched.
@@ -513,6 +524,22 @@ def _shroud(t=None, sector_forks=False):
                 else _fork_slots(side, rho))
         for cut in cuts:
             ring = ring.cut(cut)
+
+    if level_corners:
+        # Past both neighbours' leaf reach, at the shallower of their corner
+        # depths.  Nothing but the ring stands out there, so the box can run
+        # generously past the outline.
+        for long_side, short_side in (("top", "right"), ("top", "left"),
+                                      ("bottom", "right"), ("bottom", "left")):
+            sx = _axis_frame(short_side)[3]
+            sy = _axis_frame(long_side)[3]
+            c_depth = min(_shroud_corner_depth(long_side),
+                          _shroud_corner_depth(short_side))
+            x0, x1 = sorted((sx * _leaf_reach(long_side), sx * (ow / 2 + t + 1.0)))
+            y0, y1 = sorted((sy * _leaf_reach(short_side), sy * (oh / 2 + t + 1.0)))
+            box = cq.Workplane("XY").box(x1 - x0, y1 - y0, depth + 2 - c_depth,
+                                         centered=False)
+            ring = ring.cut(box.translate((x0, y0, -(depth + 2))))
     return ring
 
 
@@ -645,7 +672,8 @@ def _adapter_rail(side):
     those beams keep their collar feet.  A cut short wall loses both of its --
     the wall is 84.5 long, the window is 66.5 of it -- and what is still
     standing forward of the cut plane there is the shroud.  So the rail is that
-    shroud, thickened to ADAPTER_RAIL_T over this wall and its two corners, and
+    shroud, thickened to ADAPTER_RAIL_T over this wall and the outer part of
+    its two corners, and
     still sheathing the collar outside the window where that survives, which is
     what actually roots it.  It gives a ~6 x 11.5 mm section spanning the window
     between the two corners, which are the stiffest part of the frame.
@@ -656,19 +684,26 @@ def _adapter_rail(side):
     limit belongs to the *neighbouring* wall's leaf, and getting the corner step
     wrong is the mistake revision 10 already made once.
 
-    Clipping is by the corner arc's own start, so the rail covers this wall and
-    both its corners whole and stops exactly where the neighbouring wall's
-    straight run begins.
+    Clipping is at the neighbouring walls' leaf reach, which is where their own
+    depth steps stop and the rail's full-depth corner begins.  It used to be
+    the corner arc's start, 7.5 mm further round, but all that bought was a
+    band of full-thickness rail cut down to the neighbour's corner step -- and
+    it stood exactly where that wall's hinge has its nut started on the screw
+    tip, leaving 3.3 mm to do it in.  Inside the reach the ordinary shroud is
+    left standing at that same step.
+
+    Its corners are kept at full depth rather than levelled like the shroud's:
+    here that corner is the rail's own root, not a fin.
     """
     about, _, _, sign, _ = _axis_frame(side)
     if not _is_cut(side) or about != "Y":
         return None
-    ow, _ = frame_dims()
-    keep = ow / 2.0 - p.CORNER_RADIUS_OUTER
+    keep = max(_leaf_reach(s) for s in ("top", "bottom"))
     big = 400.0
     half_space = (cq.Workplane("XY").box(big, big, big)
                   .translate((sign * (keep + big / 2.0), 0, 0)))
-    return _shroud(p.ADAPTER_RAIL_T, sector_forks=True).intersect(half_space)
+    return (_shroud(p.ADAPTER_RAIL_T, sector_forks=True, level_corners=False)
+            .intersect(half_space))
 
 
 def _adapter_leaf_relief(side):
