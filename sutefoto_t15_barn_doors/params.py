@@ -179,6 +179,20 @@ ADAPTER_CUT_SIDES = ("right", "top")
 # centred; the short wall has only +-9 mm of room to be wrong in.
 ADAPTER_CUT_CENTER = {"right": 0.0, "top": 0.0}
 
+# Fill a window back in, for when that socket is not in use and the window is
+# only letting light out.  By the light's own long and short sides, not the
+# model's names, and applied to whichever long/short wall ADAPTER_CUT_SIDES
+# lists.
+#
+# A blocked window is still a cut side as far as everything else is concerned:
+# the hinge planes and the door leaf reliefs are derived from ADAPTER_CUT_SIDES
+# alone.  So switching a block on or off changes the frame and nothing else, and
+# the same set of printed doors fits either frame.  Taking the side out of
+# ADAPTER_CUT_SIDES instead would move the hinge planes back and the doors with
+# them.
+ADAPTER_BLOCK_LONG = True
+ADAPTER_BLOCK_SHORT = False
+
 # Slack on the window.  Along the wall this also absorbs the ~1.6 mm the stud
 # reads off-centre along the plate's 2 1/2 in axis; across it, it comes straight
 # off the hinge planes below, so it is kept tighter.

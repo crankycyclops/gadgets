@@ -594,14 +594,29 @@ def _fork_slots(side, rho, stations=None):
 # Tripod adapter window (revision 12)
 #
 # See params.py for why the window is needed and why the hinge planes move
-# forward to suit.  Here there are only three shapes: the window itself, the
+# forward to suit.  Here there are only five shapes: the window itself, the
 # rail that carries a cut short wall's hinges once the collar under them is
-# gone, and the relief that keeps a cut wall's closed leaf out of the plate.
+# gone, the gap cut back out of that rail between its hinges, the fill that
+# closes a window that is not in use, and the relief that keeps a cut wall's
+# closed leaf out of the plate.
 # --------------------------------------------------------------------------
 
 
 def _is_cut(side):
     return side in p.ADAPTER_CUT_SIDES
+
+
+def adapter_blocked(side):
+    """Is this wall's window filled back in?
+
+    Only ever the frame's business.  The wall is still cut as far as the hinge
+    planes and the door leaf reliefs are concerned, which is what lets one set
+    of doors fit a frame with the window open or closed.
+    """
+    if not _is_cut(side):
+        return False
+    short = _axis_frame(side)[0] == "Y"
+    return p.ADAPTER_BLOCK_SHORT if short else p.ADAPTER_BLOCK_LONG
 
 
 def _adapter_band(side):
@@ -675,8 +690,9 @@ def _adapter_rail(side):
     shroud, thickened to ADAPTER_RAIL_T over this wall and the outer part of
     its two corners, and
     still sheathing the collar outside the window where that survives, which is
-    what actually roots it.  It gives a ~6 x 11.5 mm section spanning the window
-    between the two corners, which are the stiffest part of the frame.
+    what actually roots it.  It gives a 12 x 11.5 mm section running in from
+    each corner, the stiffest part of the frame, to the hinge beam it carries --
+    but not on across the middle; see `adapter_rail_gaps`.
 
     How deep it may reach is a question the shroud already answers, so it is
     built by `_shroud` itself at the greater thickness rather than re-derived
@@ -704,6 +720,68 @@ def _adapter_rail(side):
                   .translate((sign * (keep + big / 2.0), 0, 0)))
     return (_shroud(p.ADAPTER_RAIL_T, sector_forks=True, level_corners=False)
             .intersect(half_space))
+
+
+def adapter_rail_gaps(side):
+    """Open space between a cut short wall's hinge beams, forward of the cut
+    plane.  Empty for any wall without a rail.
+
+    The rail used to bridge the window from corner to corner, and between the
+    two beams that left a solid 12 x 11.5 mm bar starting exactly where the
+    FRAME_HINGE_FASTENER_R channels stop.  A 20 mm screw's tip reaches about
+    0.15 mm past the channel end, so the bar stood in the way of the nyloc going
+    on at all, and out there in front of the plate it also fouled the tripod
+    head.  It carried nothing: each beam hangs off its own corner through the
+    rest of the rail, rooted in the collar sheath outside the window.
+
+    So everything forward of the cut plane between the beams' inner faces goes,
+    the ordinary shroud included -- it is still inside the nyloc's corners.
+    The price is shroud over this stretch, which leaks light with that door
+    open.  Stops at the cut plane so it never reaches a blocked window's fill.
+
+    That alone left the rail's own ends behind: from each beam's inner face in
+    to its knuckle the rail still wrapped the fastener channel, a tube standing
+    forward of the beam with nothing on its free end -- the same kind of stub
+    `_hinge_block` already cuts out of the beams, and for the same reason.  So
+    over that band the rail follows the beam's rule too and stops dead at the
+    channel's rear tangent plane, leaving the flat plate behind it.  Only on
+    the gap side of each knuckle: on the corner side that same wrap is what
+    carries the knuckle out to the rest of the rail.
+    """
+    about, _, va, sign, _ = _axis_frame(side)
+    if not _is_cut(side) or about != "Y":
+        return []
+    face = _light_face(side)
+    beam = p.FRAME_HINGE_BEAM_W / 2.0
+    core = p.HINGE_CENTER_W / 2.0
+    z_step = va + p.FRAME_HINGE_FASTENER_R
+    borne = sorted(s for s in _stations(about) if _rail_borne(side, s))
+    gaps = []
+    for a, b in zip(borne, borne[1:]):
+        for half, z1 in ((beam, p.ADAPTER_CUT_Z), (core, z_step)):
+            lo, hi = a + half, b - half
+            if hi > lo:
+                gaps.append(_wall_box(side, lo, hi, face, face + sign * 60.0,
+                                      -60.0, z1))
+    return gaps
+
+
+def _adapter_fill(side, collar):
+    """What closes a blocked window: the wall it would otherwise have had.
+
+    The collar wall and front lip, out of the plain collar, and the ordinary
+    FRAME_SHROUD_T shroud sheathing them -- not the rail, whose 12 mm over the
+    window would be a slab with no job to do.  Both only inside the window's
+    own box, so the fill starts at the cut plane and the beams on a short wall
+    stand on it rather than overhanging the window.
+
+    The shroud has its fork slots taken as swept sectors.  The full-turn slots
+    it cuts by default reach 9.2 mm from the hinge axis, well rearward of the
+    cut plane on a short wall, and would notch a light leak straight through
+    the fill at each fork.
+    """
+    box = _adapter_cut(side)
+    return collar.intersect(box).union(_shroud(sector_forks=True).intersect(box))
 
 
 def _adapter_leaf_relief(side):
@@ -780,6 +858,7 @@ def adapter_plate_envelope(side):
 
 
 def add_frame_hinges(model):
+    collar = model
     model = model.union(_shroud())
     for side in p.ADAPTER_CUT_SIDES:
         rail = _adapter_rail(side)
@@ -789,14 +868,22 @@ def add_frame_hinges(model):
         about = _axis_frame(side)[0]
         for station in _stations(about):
             model = model.union(_hinge_block(side, station))
-    # Hardware clearance last, so it applies to the shroud as well as the beams.
+    # The adapter window after all of that, because all of it is in the way,
+    # and the gap between a short wall's hinges with it.  A blocked window then
+    # gets its wall back -- after the cut, so the cut takes the rail and the
+    # fill puts back only the wall.
+    for side in p.ADAPTER_CUT_SIDES:
+        model = model.cut(_adapter_cut(side))
+        for gap in adapter_rail_gaps(side):
+            model = model.cut(gap)
+        if adapter_blocked(side):
+            model = model.union(_adapter_fill(side, collar))
+    # Hardware clearance last, so it applies to the shroud, the beams and any
+    # fill alike.
     for side in ("top", "bottom", "left", "right"):
         for station in _stations(_axis_frame(side)[0]):
             for cut in _hardware_cuts(side, station):
                 model = model.cut(cut)
-    # The adapter window after all of it, because all of it is in the way.
-    for side in p.ADAPTER_CUT_SIDES:
-        model = model.cut(_adapter_cut(side))
     return model
 
 

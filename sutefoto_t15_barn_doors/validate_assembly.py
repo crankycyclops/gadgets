@@ -27,7 +27,8 @@ each door exported as a leaf plus four loose rings.  So count the solids too.
 import cadquery as cq
 import params as p
 import frame, top_door, bottom_door, left_door, right_door
-from common import hinge_axis, adapter_plate_envelope
+from common import (hinge_axis, adapter_plate_envelope, adapter_blocked,
+                    adapter_rail_gaps)
 
 
 def vol(a,b):
@@ -73,10 +74,32 @@ def main():
             v=vol(F,moved)
             assert v < p.COLLISION_EPS, f'{s} frame collision at {deg}: {v}'
 
+    # A blocked window is meant to stop a plate, so the plate checks below are
+    # replaced by the opposite one: every bit of collar wall and lip the window
+    # would have taken out of the plate's footprint has to be back.  Any of it
+    # missing is a light leak.
+    collar=frame.collar().val()
+    open_sides=[s for s in p.ADAPTER_CUT_SIDES if not adapter_blocked(s)]
+    for side in p.ADAPTER_CUT_SIDES:
+        if side in open_sides: continue
+        plate=adapter_plate_envelope(side).val()
+        # Cut last: a fully restored wall leaves nothing, and OCC will not take
+        # that empty result as the input to another boolean.
+        missing=collar.intersect(plate).cut(F)
+        v=0.0 if missing.isNull() else missing.Volume()
+        assert v < p.COLLISION_EPS, f'{side} blocked window is missing {v} of wall'
+
+    # Nothing may stand between a cut short wall's hinge beams forward of the
+    # cut plane: that is where the nyloc goes on, and where the tripod head is.
+    for side in p.ADAPTER_CUT_SIDES:
+        for gap in adapter_rail_gaps(side):
+            v=vol(F,gap.val())
+            assert v < p.COLLISION_EPS, f'{side} rail gap is not clear: {v}'
+
     # A seated plate must be clear of the frame, and of every door at every
     # angle -- including the doors on the other three walls, which swing past
     # the corners near it.
-    for side in p.ADAPTER_CUT_SIDES:
+    for side in open_sides:
         plate=adapter_plate_envelope(side).val()
         v=vol(F,plate)
         assert v < p.COLLISION_EPS, f'{side} plate/frame clash {v}'
@@ -86,9 +109,11 @@ def main():
                 v=vol(plate,moved)
                 assert v < p.COLLISION_EPS, \
                     f'{side} plate/{s} door clash at {deg}: {v}'
-    sides=', '.join(p.ADAPTER_CUT_SIDES)
+    sides=', '.join(open_sides) or 'no side'
+    blocked=', '.join(s for s in p.ADAPTER_CUT_SIDES if s not in open_sides)
     print(f'PASS: five single solids; all doors stack closed and each clears the '
           f'frame through 0-{travel} degrees; a plate on {sides} clears the frame '
-          f'and every door through the same travel')
+          f'and every door through the same travel'
+          + (f'; the {blocked} window is closed' if blocked else ''))
 
 if __name__=='__main__': main()

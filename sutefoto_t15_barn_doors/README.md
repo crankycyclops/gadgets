@@ -97,6 +97,23 @@ revision 8 hinges that actually peeled off. `HINGE_CENTER_W` is the number to
 raise if it wants more; it sets the tongue's width directly, and the door forks
 are positioned from it.
 
+## Tripod adapter windows
+
+The long and short walls that carry the light's 1/4-20 sockets (`ADAPTER_CUT_SIDES`) each have a window cut in them so a quick-release plate can seat flush on the light. See the revision 12 notes in `params.py` for why.
+
+**Blocking a window.** A window you are not using is just a light leak, so either one can be filled back in:
+
+```python
+ADAPTER_BLOCK_LONG = True    # default: long-wall window closed
+ADAPTER_BLOCK_SHORT = False  # default: short-wall window open
+```
+
+A blocked window gets back the wall it would otherwise have: collar wall, front lip and the ordinary 2.4 mm shroud, from `ADAPTER_CUT_Z` rearward. It is still a cut side for everything else — the hinge planes and the door leaf reliefs follow `ADAPTER_CUT_SIDES` alone — so these two switches change only the frame. The same doors fit every combination. Do not remove a side from `ADAPTER_CUT_SIDES` to close its window; that moves the hinge planes back and the printed doors will no longer fit.
+
+On the short wall, a blocked window also gives the two hinge beams something to stand on instead of overhanging the window.
+
+**Short-wall rail gap.** The rail that carries the short wall's hinges no longer runs across the middle. Between the two hinge beams (|y| < 11), everything forward of `ADAPTER_CUT_Z` is removed, rail and shroud alike. That solid 12 × 11.5 mm bar started exactly where the fastener channels end, so a 20 mm screw's tip ran into it and the nyloc could not go on; it also fouled the tripod head. Each beam still hangs off its own corner through the rest of the rail. The cost is that stretch of shroud, so with the short-side door open some light escapes sideways between the hinges.
+
 ## Keep your fit tuning
 
 If you already tuned the old project, copy your preferred values for these into this `params.py`:
@@ -134,7 +151,10 @@ The modeled bore is 3.3 mm. Do not intentionally generate support inside it; cle
 
 1. all five solids are valid;
 2. all four doors can occupy their fully closed stacked positions simultaneously without solid intersection;
-3. each door clears the frame through its complete closed-to-open sweep, all the way to `FRAME_HINGE_MAX_OPEN`.
+3. each door clears the frame through its complete closed-to-open sweep, all the way to `FRAME_HINGE_MAX_OPEN`;
+4. a blocked adapter window has all of its collar wall and lip back across the plate's footprint;
+5. nothing stands in the short-wall rail gap;
+6. a plate seated in each open adapter window clears the frame and every door through the full sweep.
 
 The sweep runs to the full travel deliberately. Revision 9's beam capped the doors at 96° and no fixed 0–90° check could ever have caught it.
 

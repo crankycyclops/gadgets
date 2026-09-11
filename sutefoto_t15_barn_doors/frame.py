@@ -16,7 +16,8 @@ import params as p
 from common import rounded_prism, add_frame_hinges
 
 
-def build():
+def collar():
+    """The bare collar: wall and front lip, before hinges, shroud or windows."""
     cavity_w = p.LIGHT_W + p.XY_CLEARANCE
     cavity_h = p.LIGHT_H + p.XY_CLEARANCE
     outer_w = cavity_w + 2 * p.WALL
@@ -32,8 +33,11 @@ def build():
     cavity = rounded_prism(cavity_w, cavity_h,
                            p.COLLAR_DEPTH - p.FRONT_LIP + 0.5,
                            p.CORNER_RADIUS_BODY, z0=p.FRONT_LIP)
-    frame = frame.cut(cavity)
-    return add_frame_hinges(frame)
+    return frame.cut(cavity)
+
+
+def build():
+    return add_frame_hinges(collar())
 
 
 # CQ-Editor preview.  Still fires on Run in CQ-Editor; skipped when frame.py is
