@@ -112,7 +112,7 @@ A blocked window gets back the wall it would otherwise have: collar wall, front 
 
 On the short wall, a blocked window also gives the two hinge beams something to stand on instead of overhanging the window.
 
-**Short-wall rail gap.** The rail that carries the short wall's hinges no longer runs across the middle. Between the two hinge beams (|y| < 11), everything forward of `ADAPTER_CUT_Z` is removed, rail and shroud alike. That solid 12 × 11.5 mm bar started exactly where the fastener channels end, so a 20 mm screw's tip ran into it and the nyloc could not go on; it also fouled the tripod head. Each beam still hangs off its own corner through the rest of the rail. The cost is that stretch of shroud, so with the short-side door open some light escapes sideways between the hinges.
+**Short-wall rail gap.** The rail that carries the short wall's hinges no longer runs across the middle. Between the two hinge beams (|y| < 11), everything forward of `ADAPTER_CUT_Z` is removed, rail and shroud alike. That solid 12 × 11.5 mm bar started exactly where the fastener channels end, so a 20 mm screw's tip ran into it and the nyloc could not go on; it also fouled the tripod head. From each beam's inner face in to its knuckle (|y| 11–19), the rail is also cut back to the channel's rear tangent plane, the same rule the beams follow. Otherwise it was left standing as a free tube around the channel, the kind of stub that snaps off. Only the flat plate behind it stays. Each beam still hangs off its own corner through the rest of the rail. The cost is that stretch of shroud, so with the short-side door open some light escapes sideways between the hinges.
 
 ## Keep your fit tuning
 

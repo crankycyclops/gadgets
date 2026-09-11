@@ -744,9 +744,10 @@ def adapter_rail_gaps(side):
     forward of the beam with nothing on its free end -- the same kind of stub
     `_hinge_block` already cuts out of the beams, and for the same reason.  So
     over that band the rail follows the beam's rule too and stops dead at the
-    channel's rear tangent plane, leaving the flat plate behind it.  Only on
-    the gap side of each knuckle: on the corner side that same wrap is what
-    carries the knuckle out to the rest of the rail.
+    channel's rear tangent plane, leaving the flat plate behind it.  Only
+    needed on the gap side of each knuckle: on the corner side the fork's own
+    sweep has already cut the wrap back to that plate, and past the fork the
+    rail runs straight on into its root, so nothing there stands free.
     """
     about, _, va, sign, _ = _axis_frame(side)
     if not _is_cut(side) or about != "Y":
