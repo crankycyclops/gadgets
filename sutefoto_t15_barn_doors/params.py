@@ -45,6 +45,23 @@ HINGE_SCREW_LENGTH = 20.0
 # foot of this file, under "Tripod adapter window".  The revision 11 values
 # were HINGE_Z_TOP -4.5, HINGE_Z_BOTTOM -8.3, HINGE_Z_SIDE -12.1.
 
+# Extra standoff between the light and the doors (revision 13).  On the short
+# wall the hinge sat about 6 mm in front of a seated plate's front edge, which
+# is where the tripod head's lock closes, so the frame has to hold the hinges
+# further out.
+#
+# It is one number because nothing forward of the collar is placed by hand.  The
+# shroud's depth is |HINGE_Z| plus an in-plane term, the hinge beams are built
+# from HINGE_Z, the adapter rail is the shroud at a greater thickness, and the
+# leaves are placed on their own axes -- so moving the three hinge planes moves
+# the whole standoff with them.  The collar's grip on the light, the front lip,
+# the aperture and both adapter windows are all rearward of z = 0 and none of
+# them reads HINGE_Z, so they do not move: the windows keep their dimensions and
+# stay against the light's face, and the 40 mm is added on top of them.  The
+# leaves come out geometrically identical, only translated, so a set already
+# printed still fits.
+FRAME_EXTRA_DEPTH = 40.0
+
 # Frame-side hinge buttress.  Revision 9 replaces the old tapered web -- which
 # was only HINGE_CENTER_W wide and rooted 2 mm into the wall, and duly peeled
 # off the frame -- with a solid beam standing on the outside of the collar.
@@ -256,6 +273,44 @@ HINGE_Z_BOTTOM = min(-8.3, _LONG_LIMIT) if "bottom" in _CUT else -8.3
 HINGE_Z_SIDE = min(HINGE_Z_TOP, HINGE_Z_BOTTOM) - LEAF_STACK_PITCH
 if _CUT & {"left", "right"}:
     HINGE_Z_SIDE = min(HINGE_Z_SIDE, _SHORT_LIMIT)
+
+# FRAME_EXTRA_DEPTH applies after all of that, not before.  Every limit above is
+# a "no further rearward than" bound, so a uniform shift forward can only
+# satisfy them harder -- and taking it last keeps the stagger between the three
+# layers, which is what lets the leaves stack closed, exactly as derived.
+HINGE_Z_TOP -= FRAME_EXTRA_DEPTH
+HINGE_Z_BOTTOM -= FRAME_EXTRA_DEPTH
+HINGE_Z_SIDE -= FRAME_EXTRA_DEPTH
+
+# How far rearward of the hinge axis the full-thickness rail reaches, and with
+# it the beams standing on it.  Rearward of this plane a cut short wall is
+# ordinary FRAME_SHROUD_T shroud instead.
+#
+# Revision 12 ran the rail from the cut plane forward, which was the whole wall
+# it had.  Carried straight through FRAME_EXTRA_DEPTH that becomes an
+# ADAPTER_RAIL_T slab 46 mm tall standing 12 mm off the frame's outer edge --
+# through the exact space the extra depth is there to vacate, so the hinge would
+# have moved out of the tripod head's way and the rail moved into it.  So the
+# rail is now only as tall as the hinges it carries, and the wall under it is
+# the 2.4 mm shroud: that stands 3.25 mm off the light's own face, inside the
+# plate's 10 mm thickness, where nothing that clamps the plate can reach it.
+#
+# It is also what closes the window wall.  The gap between the beams used to be
+# cut open from the cut plane forward -- a documented leak, 13 mm of it -- and
+# at 46 mm that is most of the wall.  Bounded here the leak stays by the hinges,
+# where the nyloc actually needs the room.
+#
+# 12 mm gives a 12 x 17.4 mm section running in from each corner to the beam it
+# carries -- the rail reaches 5.4 mm forward of the axis on its own -- against
+# the 12 x 11.5 of revision 12.
+#
+# Never rearward of the cut plane, whatever FRAME_EXTRA_DEPTH is set to.  Below
+# about 6 mm of extra depth the rail's rear face would otherwise land inside the
+# window, where there is no wall for it to be the full thickness of anyway, and
+# the gap between the beams would reach into a blocked short window's fill.
+# Clamped, FRAME_EXTRA_DEPTH = 0 returns the revision 12 frame exactly.
+ADAPTER_RAIL_DEPTH = 12.0
+ADAPTER_RAIL_REAR_Z = min(HINGE_Z_SIDE + ADAPTER_RAIL_DEPTH, ADAPTER_CUT_Z)
 
 # Clearance used by the assembly validator.
 COLLISION_EPS = 0.02

@@ -112,7 +112,35 @@ A blocked window gets back the wall it would otherwise have: collar wall, front 
 
 On the short wall, a blocked window also gives the two hinge beams something to stand on instead of overhanging the window.
 
-**Short-wall rail gap.** The rail that carries the short wall's hinges no longer runs across the middle. Between the two hinge beams (|y| < 11), everything forward of `ADAPTER_CUT_Z` is removed, rail and shroud alike. That solid 12 × 11.5 mm bar started exactly where the fastener channels end, so a 20 mm screw's tip ran into it and the nyloc could not go on; it also fouled the tripod head. From each beam's inner face in to its knuckle (|y| 11–19), the rail is also cut back to the channel's rear tangent plane, the same rule the beams follow. Otherwise it was left standing as a free tube around the channel, the kind of stub that snaps off. Only the flat plate behind it stays. Each beam still hangs off its own corner through the rest of the rail. The cost is that stretch of shroud, so with the short-side door open some light escapes sideways between the hinges.
+**Short-wall rail gap.** The rail that carries the short wall's hinges does not run across the middle. Between the two hinge beams (|y| < 11), everything forward of `ADAPTER_RAIL_REAR_Z` is removed, rail and shroud alike. That solid bar started exactly where the fastener channels end, so a 20 mm screw's tip ran into it and the nyloc could not go on. From each beam's inner face in to its knuckle (|y| 11–19), the rail is also cut back to the channel's rear tangent plane, the same rule the beams follow. Otherwise it was left standing as a free tube around the channel, the kind of stub that snaps off. Only the flat plate behind it stays. Each beam still hangs off its own corner through the rest of the rail. The cost is that stretch of shroud — a 22 × 17.4 mm slot — so with the short-side door open some light escapes sideways between the hinges.
+
+## Revision 13 — extra depth
+
+`FRAME_EXTRA_DEPTH` (40 mm) holds the whole hinge line further out in front of the light. It exists because the short wall's hinge sat about 6 mm in front of a seated quick-release plate's front edge — right where the tripod head's lock closes — so mounting the light by that socket fouled the hinge.
+
+**Changing it.** Edit the one number and re-export; nothing else needs touching.
+
+```python
+FRAME_EXTRA_DEPTH = 40.0   # 0 gives the revision 12 frame back
+```
+
+The frame's overall depth tracks it 1:1 — 33.1 mm at 0, 73.1 mm at 40, 113.1 mm at 80. `validate_assembly.py` passes at 0, 20, 40 and 60, and the frame builds as one valid solid with nothing intruding on either window at 0, 10, 20, 40, 60 and 80. Only the frame needs reprinting: the leaves are placed on their own axes, so changing this moves them in the assembly but does not change their geometry at all.
+
+It is one number because nothing forward of the collar is placed by hand. The shroud's depth is `|HINGE_Z|` plus an in-plane term, the hinge beams are built from `HINGE_Z`, the adapter rail is the shroud at a greater thickness, and the leaves are placed on their own axes. So the parameter does one thing: shift the three hinge planes forward, after the adapter limits have been derived. Every one of those limits is a "no further rearward than" bound, and the 5.215/4.35 mm stagger between the three leaf layers is preserved, so the closed stack is unaffected.
+
+- **The windows do not move.** `ADAPTER_CUT_Z`, the window band and the collar are all rearward of z = 0 and none of them reads `HINGE_Z`. The short wall rearward of the cut plane is geometrically identical to revision 12 — checked, byte for byte. The 40 mm is added on top of the cutouts.
+- **The doors do not change.** All four leaves come out with identical volume and identical bounding boxes, only translated in Z. A set already printed still fits.
+- **The frame goes from 33 to 73 mm deep** overall (z −65.06 … +8).
+
+**What stands over the cutout.** Revision 12 ran the `ADAPTER_RAIL_T` rail from the cut plane forward, because that was the whole wall it had. Carried straight through the extra depth that becomes a 12 mm slab 46 mm tall, standing in exactly the space the extra depth is there to vacate — the hinge would have moved out of the tripod head's way and the rail moved into it. So `ADAPTER_RAIL_DEPTH` (12 mm, measured rearward from the hinge axis) makes the rail only as tall as the hinges it carries, and the wall under it is the ordinary 2.4 mm shroud:
+
+| z | over the window band |
+| --- | --- |
+| −65.1 … −45.9 | hinge beams and rail, out to x 94.75 (12 mm off the frame edge) |
+| −45.9 … −11.8 | plain 2.4 mm shroud, out to x 85.15 |
+| −11.8 … +8 | the window itself, open to the light's face |
+
+2.4 mm off the frame's outer edge is 3.25 mm off the light's own face, inside the plate's 10 mm thickness, so nothing that clamps the plate can reach it. Bounding the rail gap at `ADAPTER_RAIL_REAR_Z` rather than at the cut plane is also what keeps the documented leak between the hinges to 17.4 mm instead of 46.
 
 ## Keep your fit tuning
 

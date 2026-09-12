@@ -254,11 +254,14 @@ def _hinge_block(side, station):
     if _rail_borne(side, station):
         # The collar this beam used to root in is inside the adapter window, so
         # there is no wall left to put a foot in.  A plain prism instead,
-        # stopped at the cut plane and standing on the rail -- see
-        # _adapter_rail.
+        # stopped at ADAPTER_RAIL_REAR_Z and standing on the rail -- see
+        # _adapter_rail.  It stops there rather than at the cut plane because
+        # everything it would gain by carrying on rearward is 12 mm of section
+        # standing in front of the tripod head; the wall under it is the 2.4 mm
+        # shroud, which is not.
         pts = [(edge - ua, v_lo - va), (u_out - ua, v_lo - va),
-               (u_out - ua, p.ADAPTER_CUT_Z - va),
-               (edge - ua, p.ADAPTER_CUT_Z - va)]
+               (u_out - ua, p.ADAPTER_RAIL_REAR_Z - va),
+               (edge - ua, p.ADAPTER_RAIL_REAR_Z - va)]
     else:
         # An L in section: the base roots into the wall across the whole collar
         # depth, while everything forward of the front face stays outboard of
@@ -710,6 +713,14 @@ def _adapter_rail(side):
 
     Its corners are kept at full depth rather than levelled like the shroud's:
     here that corner is the rail's own root, not a fin.
+
+    Over the window itself it is necked back to ADAPTER_RAIL_REAR_Z, so what
+    stands there is a beam as tall as the hinges need and the ordinary
+    FRAME_SHROUD_T shroud under it.  Full depth over the window would put an
+    ADAPTER_RAIL_T slab 12 mm off the frame's outer edge for the whole of
+    FRAME_EXTRA_DEPTH, straight through where the tripod head closes on the
+    plate.  Outside the window the rail keeps its full depth: that is where it
+    sheathes the collar, which is what roots it.
     """
     about, _, _, sign, _ = _axis_frame(side)
     if not _is_cut(side) or about != "Y":
@@ -718,13 +729,17 @@ def _adapter_rail(side):
     big = 400.0
     half_space = (cq.Workplane("XY").box(big, big, big)
                   .translate((sign * (keep + big / 2.0), 0, 0)))
+    lo, hi = _adapter_band(side)
+    face = _light_face(side)
+    neck = _wall_box(side, lo, hi, face, face + sign * 60.0,
+                     p.ADAPTER_RAIL_REAR_Z, p.COLLAR_DEPTH + 2.0)
     return (_shroud(p.ADAPTER_RAIL_T, sector_forks=True, level_corners=False)
-            .intersect(half_space))
+            .intersect(half_space).cut(neck))
 
 
 def adapter_rail_gaps(side):
-    """Open space between a cut short wall's hinge beams, forward of the cut
-    plane.  Empty for any wall without a rail.
+    """Open space between a cut short wall's hinge beams, forward of the rail.
+    Empty for any wall without a rail.
 
     The rail used to bridge the window from corner to corner, and between the
     two beams that left a solid 12 x 11.5 mm bar starting exactly where the
@@ -734,10 +749,13 @@ def adapter_rail_gaps(side):
     head.  It carried nothing: each beam hangs off its own corner through the
     rest of the rail, rooted in the collar sheath outside the window.
 
-    So everything forward of the cut plane between the beams' inner faces goes,
-    the ordinary shroud included -- it is still inside the nyloc's corners.
-    The price is shroud over this stretch, which leaks light with that door
-    open.  Stops at the cut plane so it never reaches a blocked window's fill.
+    So everything forward of ADAPTER_RAIL_REAR_Z between the beams' inner faces
+    goes, the ordinary shroud included -- it is still inside the nyloc's
+    corners.  The price is shroud over this stretch, which leaks light with that
+    door open, and bounding it at the rail rather than at the cut plane is what
+    keeps that price to the hinges: rearward of the rail the window wall is
+    unbroken 2.4 mm shroud for the whole of FRAME_EXTRA_DEPTH.  Stopping short
+    of the cut plane also means it can never reach a blocked window's fill.
 
     That alone left the rail's own ends behind: from each beam's inner face in
     to its knuckle the rail still wrapped the fastener channel, a tube standing
@@ -748,6 +766,11 @@ def adapter_rail_gaps(side):
     needed on the gap side of each knuckle: on the corner side the fork's own
     sweep has already cut the wrap back to that plate, and past the fork the
     rail runs straight on into its root, so nothing there stands free.
+
+    Both boxes reach forward from the hinge axis rather than from a fixed z.
+    They used to start at -60, which cleared a shroud 23 mm deep by a wide
+    margin; with FRAME_EXTRA_DEPTH the shroud reaches past it and the fixed
+    bound would have left a bar across the front of the gap.
     """
     about, _, va, sign, _ = _axis_frame(side)
     if not _is_cut(side) or about != "Y":
@@ -759,11 +782,11 @@ def adapter_rail_gaps(side):
     borne = sorted(s for s in _stations(about) if _rail_borne(side, s))
     gaps = []
     for a, b in zip(borne, borne[1:]):
-        for half, z1 in ((beam, p.ADAPTER_CUT_Z), (core, z_step)):
+        for half, z1 in ((beam, p.ADAPTER_RAIL_REAR_Z), (core, z_step)):
             lo, hi = a + half, b - half
             if hi > lo:
                 gaps.append(_wall_box(side, lo, hi, face, face + sign * 60.0,
-                                      -60.0, z1))
+                                      va - 60.0, z1))
     return gaps
 
 

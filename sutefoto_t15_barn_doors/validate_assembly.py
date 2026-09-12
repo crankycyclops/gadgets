@@ -90,7 +90,7 @@ def main():
         assert v < p.COLLISION_EPS, f'{side} blocked window is missing {v} of wall'
 
     # Nothing may stand between a cut short wall's hinge beams forward of the
-    # cut plane: that is where the nyloc goes on, and where the tripod head is.
+    # rail: that is where the nyloc goes on.
     for side in p.ADAPTER_CUT_SIDES:
         for gap in adapter_rail_gaps(side):
             v=vol(F,gap.val())
